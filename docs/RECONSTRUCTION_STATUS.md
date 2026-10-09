@@ -17,7 +17,7 @@
 - ArmoredHub, reconciliação e idempotência.
 - Coordinator, SQLite, checkpoints, Recovery, Startup Audit, storage e trace.
 - Coleta histórica separada em Sync → Vision → Stock.
-- **ArmoredStock** como ferramenta de linha de comando independente, reutilizando o Coordinator e a mesma implementação canônica da etapa `stock` para evitar lógica duplicada.
+- **ArmoredStock** como pacote de ferramenta independente em `ArmoredStock/service.py`; `run_armored_stock.py` é o launcher dedicado e `run_catchup_stage.py stock` delega à mesma implementação, sem duplicar materialização.
 - Configuração de exemplo, launcher, documentação e testes textuais.
 
 O pipeline de orquestração e o gerador de legendas foram restaurados a partir do branch de referência `fix/global-discovery-vision-download-production-20261009` após a comparação revelar divergências na primeira portagem. A suíte completa deste repositório precisa confirmar a compatibilidade.
@@ -33,18 +33,17 @@ O pipeline de orquestração e o gerador de legendas foram restaurados a partir 
 - Não executa ArmoredIA, Studio/RVC, Hub, publicação, cleanup, nem muda CATCH-UP para LIVE.
 - Entradas suportadas: `python .\\run_catchup_stage.py stock` e `python .\\run_armored_stock.py`. Ambas chamam a mesma lógica de etapa, sem duplicar implementação.
 
-## Bloqueios para declarar a reconstrução concluída
+## Pendências para declarar a reconstrução concluída
 
-1. Copiar os arquivos binários originais `ArmoredStudio/assets/banner.png` e `ArmoredStudio/assets/efeitosonoro.wav` do laboratório.
-2. Preencher localmente `BOT_API_EXE` em `credentials/project.env`; o launcher não deve conter caminho de máquina fixo.
-3. Executar `python -m pytest -q -W error::RuntimeWarning` e corrigir cada falha real.
-4. Auditar imports, rotas das três fontes e migrações SQLite no repositório reconstruído.
-5. Validar: Vision sem download quando rejeitada; download só após aprovação; classificação PT-BR/idioma estrangeiro/música/sem áudio; publicação com `CONFIRMED/ABSENT/UNKNOWN`; restart e checkpoints; CATCH-UP → LIVE.
-6. Confirmar o comportamento independente do ArmoredStock em banco de teste, inclusive bloqueio por Vision pendente, preservação de ORIGINAL e parada na primeira falha.
-7. Não ativar produção nem afirmar ponta a ponta até que os gates anteriores tenham evidência observável.
+1. Preencher localmente `BOT_API_EXE` em `credentials/project.env`; o launcher não deve conter caminho de máquina fixo.
+2. Executar `python -m pytest -q -W error::RuntimeWarning` após a inclusão do pacote ArmoredStock e a limpeza dos artefatos experimentais.
+3. Auditar imports, rotas das três fontes e migrações SQLite no repositório reconstruído.
+4. Validar no ambiente Telegram local: Vision sem download quando rejeitada; download só após aprovação; classificação PT-BR/idioma estrangeiro/música/sem áudio; publicação com `CONFIRMED/ABSENT/UNKNOWN`; restart e checkpoints; CATCH-UP → LIVE.
+5. Confirmar ArmoredStock em banco de teste, incluindo bloqueio por Vision pendente, preservação de ORIGINAL e parada na primeira falha.
+6. Não ativar produção nem afirmar ponta a ponta até que os gates anteriores tenham evidência observável.
 
-## Exclusões deliberadas
+## Limpeza deliberada
 
-O script `scripts/reset_certification_lab.ps1` não foi portado porque é um utilitário de reset destrutivo do laboratório e não deve fazer parte do caminho operacional padrão. Os testes `tests/test_invariants.py` e `tests/test_studio_story_format.py`, que haviam ficado de fora na primeira portagem, foram recuperados do laboratório e incluídos novamente.
+Os scripts experimentais `scripts/probe_google_shopee_discovery.py`, `scripts/retest_telegram_video_metadata.py` e `scripts/validate_caption_v1_real.py`, junto com `requirements-web-discovery.txt`, foram removidos por não fazerem parte do caminho operacional reproduzível. O script destrutivo `scripts/reset_certification_lab.ps1` também não foi portado. Os testes `tests/test_invariants.py` e `tests/test_studio_story_format.py` foram recuperados e mantidos.
 
 Este documento é um registro de status, não um certificado de funcionamento real.
