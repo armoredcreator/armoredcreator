@@ -45,6 +45,6 @@ O pipeline de orquestração e o gerador de legendas foram reimplementados nesta
 
 ## Exclusões deliberadas
 
-O script `scripts/reset_certification_lab.ps1` não foi portado porque é um utilitário de reset destrutivo do laboratório e não deve fazer parte do caminho operacional padrão. Dois testes legados ainda precisam ser recuperados ou cobertos por testes equivalentes.
+O script `scripts/reset_certification_lab.ps1` não foi portado porque é um utilitário de reset destrutivo do laboratório e não deve fazer parte do caminho operacional padrão. Os testes `tests/test_invariants.py` e `tests/test_studio_story_format.py`, que haviam ficado de fora na primeira portagem, foram recuperados do laboratório e incluídos novamente.
 
 Este documento é um registro de status, não um certificado de funcionamento real.
