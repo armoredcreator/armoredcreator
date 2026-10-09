@@ -141,6 +141,15 @@ class Pipeline:
                     check = self.publisher.check_publication(self.db.get(item_id))
                 except Exception:
                     check = PublicationCheck.UNKNOWN
+                if check == PublicationCheck.CONFIRMED:
+                    record = self.db.publication(item_id)
+                    message_id = str(record["published_message_id"] or "") if record else ""
+                    if message_id:
+                        self.db.publication_confirmed(item_id, message_id)
+                        self.db.transition(item_id, State.PUBLISHED,
+                                           f"send raised but external reconciliation CONFIRMED {message_id}")
+                        self.cleanup(item_id)
+                        return
                 reason = (
                     f"publication outcome UNKNOWN after {type(exc).__name__}: {exc}"
                     if check != PublicationCheck.ABSENT
