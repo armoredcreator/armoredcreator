@@ -48,7 +48,7 @@ class Pipeline:
         if publication is not None:
             check = self.publisher.check_publication(item)
             if check == PublicationCheck.CONFIRMED:
-                message_id = str(publication.get("published_message_id") or "")
+                message_id = str(publication["published_message_id"] or "")
                 if not message_id:
                     self.db.transition(item_id, State.RECOVERY, "confirmed-publication-without-message-id")
                     return
@@ -102,7 +102,15 @@ class Pipeline:
                 )
 
             if self._caption_enabled() and self.ia is not None and item.ia_context:
-                caption, batch_id, evaluations = self.ia.generate_caption_with_evidence(item.ia_context)
+                self.db.transition(item_id, State.IA, "caption-start")
+                try:
+                    caption, batch_id, evaluations = self.ia.generate_caption_with_evidence(item.ia_context)
+                except Exception as exc:
+                    batch_id = getattr(exc, "batch_id", None)
+                    evaluations = getattr(exc, "evaluations", ())
+                    if batch_id and evaluations:
+                        self.db.record_caption_candidates(item_id, batch_id, evaluations)
+                    raise
                 self.db.record_caption_candidates(item_id, batch_id, evaluations)
                 self.db.set_caption(item_id, caption)
                 item = self.db.get(item_id)
@@ -119,7 +127,11 @@ class Pipeline:
             self.db.transition(item_id, State.PUBLISHING, "hub-publish-start")
             publish_once = getattr(self.publisher, "publish_once", None)
             try:
-                result = publish_once(item) if callable(publish_once) else self.publisher.publish(item)
+                if callable(publish_once):
+                    result = publish_once(item)
+                else:
+                    self.db.publication_started(item_id)
+                    result = self.publisher.publish(item)
             except PublicationUnknownError as exc:
                 self.db.transition(item_id, State.RECOVERY, f"publication-UNKNOWN: {exc}")
                 return
@@ -174,12 +186,19 @@ class Pipeline:
         item = self.db.get(item_id)
         if item.state != State.PUBLISHED:
             return
-        try:
-            check = self.publisher.check_publication(item)
-        except Exception:
-            return
-        if check != PublicationCheck.CONFIRMED:
-            return
+        publication = self.db.publication(item_id)
+        confirmed = bool(publication and publication["confirmed"] and publication["published_message_id"])
+        if not confirmed:
+            try:
+                check = self.publisher.check_publication(item)
+            except Exception:
+                return
+            if check != PublicationCheck.CONFIRMED:
+                return
+            message_id = str(publication["published_message_id"] or "") if publication else ""
+            if not message_id:
+                return
+            self.db.publication_confirmed(item_id, message_id)
         # ORIGINAL is immutable recovery evidence; only derived files are removed.
         for value in (item.working_path, item.result_path):
             if value:
