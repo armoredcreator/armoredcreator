@@ -1151,3 +1151,40 @@ O baseline oficial continua intocado.
 A versão certificada atual é a referência funcional única deste repositório. Não há branches de desenvolvimento necessários para executar a versão certificada.
 
 Qualquer mudança futura deve ser isolada em branch própria, passar pela suíte completa, passar por `git diff --check` e obter evidência operacional antes de ser tratada como uma nova versão.
+
+---
+
+# 28. ArmoredStock — ferramenta independente de materialização
+
+O ArmoredStock é uma entrada operacional separada para baixar os originais aprovados pela Vision sem iniciar o pipeline de produção.
+
+Referência de implementação: `armoredcreator-audio-lab`, branch `feat/armoredstock-independent-tool`, commit `dbfa2b2bec48c9b684ab1a61f4a496147653a56e`.
+
+## Execução
+
+```powershell
+python .\\run_armored_stock.py
+```
+
+Também pode ser executado como etapa explícita:
+
+```powershell
+python .\\run_catchup_stage.py stock
+```
+
+As duas entradas usam o Coordinator, o lease do SQLite e a mesma lógica canônica de materialização. ArmoredStock não instancia um segundo pipeline.
+
+## Pré-condições e limites
+
+- Exatamente três fontes configuradas no `credentials/project.env`.
+- A etapa Vision deve ter terminado sem falhas técnicas.
+- Nenhum candidato pode permanecer sem decisão da Vision nem ter evidência aprovada interrompida.
+- Somente itens com `affiliate_url` válida e estado elegível são baixados.
+- Um item por vez, em ordem determinística por fonte e ID de mensagem.
+- ORIGINAL existente é preservado; somente caminho de ORIGINAL ausente/legado pode ser reparado.
+- A primeira falha interrompe a sequência; não se permite que itens posteriores ultrapassem o item que falhou.
+- A etapa não executa ArmoredIA, Studio/RVC, Hub, publicação, cleanup nem transição para LIVE.
+- O relatório indica baixados por fonte, originais já existentes, itens aprovados ainda sem ORIGINAL e erros.
+- SQLite e checkpoints não devem ser zerados para repetir a etapa.
+
+ArmoredStock termina após a materialização. A decisão de continuar para IA/Studio/Hub/publicação pertence a uma execução separada e explícita.
