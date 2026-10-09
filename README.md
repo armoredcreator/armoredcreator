@@ -52,7 +52,7 @@ Configure as credenciais privadas em `credentials/project.env`, usando `credenti
 
 ## Estado desta reconstrução
 
-O Coordinator, Sync, Vision, Studio, Hub, Recovery, SQLite, roteamento multi-source, coleta por etapas e documentação foram portados/comparados com as referências indicadas. O núcleo `armored_core/pipeline.py` e o gerador `ArmoredIA/caption/generator.py` foram reimplementados nesta reconstrução e devem ser tratados como código novo até a suíte completa validar seus contratos.
+O Coordinator, Sync, Vision, Studio, Hub, Recovery, SQLite, roteamento multi-source, coleta por etapas e documentação foram portados/comparados com as referências indicadas. O núcleo `armored_core/pipeline.py` e o gerador `ArmoredIA/caption/generator.py` foram alinhados novamente aos arquivos canônicos do branch de referência `fix/global-discovery-vision-download-production-20261009`; essa restauração corrige divergências introduzidas na primeira portagem, mas ainda exige CI verde neste repositório.
 
 Os binários originais `ArmoredStudio/assets/banner.png` e `ArmoredStudio/assets/efeitosonoro.wav` ainda precisam ser copiados do laboratório; não foram incluídos nesta portagem textual. Veja [`ArmoredStudio/assets/README.md`](ArmoredStudio/assets/README.md) e [`docs/RECONSTRUCTION_STATUS.md`](docs/RECONSTRUCTION_STATUS.md).
 
