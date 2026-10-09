@@ -115,11 +115,23 @@ class Database:
             row = con.execute("SELECT * FROM items WHERE content_id=?", (content_id,)).fetchone()
             return dict(row) if row else None
 
+    def items_for_source(self, source_id: int, states: tuple[str, ...] | None = None) -> list[dict]:
+        with self.connect() as con:
+            if states:
+                marks = ",".join("?" for _ in states)
+                rows = con.execute(
+                    f"SELECT * FROM items WHERE source_id=? AND state IN ({marks}) ORDER BY message_id",
+                    (source_id, *states)).fetchall()
+            else:
+                rows = con.execute("SELECT * FROM items WHERE source_id=? ORDER BY message_id",
+                                   (source_id,)).fetchall()
+            return [dict(row) for row in rows]
+
     def next_eligible(self) -> dict | None:
         with self.connect() as con:
             row = con.execute("""
                 SELECT * FROM items
-                WHERE state IN ('RECEIVED','RECOVERY')
+                WHERE state IN ('READY','RECEIVED','RECOVERY')
                   AND NOT EXISTS (SELECT 1 FROM items WHERE state IN ('DOWNLOADING','PROCESSING','PUBLISHING'))
                 ORDER BY received_at, source_id, message_id LIMIT 1
             """).fetchone()
@@ -159,7 +171,6 @@ class Database:
             return dict(row) if row else None
 
     def begin_publication(self, content_id: str, destination_id: int, topic_id: int) -> bool:
-        """Return False if a publication already exists; never overwrite ambiguity."""
         now = utcnow()
         with self.transaction() as con:
             cur = con.execute("""
@@ -173,11 +184,11 @@ class Database:
                            message_id: int | None = None, detail: str | None = None) -> None:
         now = utcnow()
         with self.transaction() as con:
-            con.execute("""
+            cur = con.execute("""
                 UPDATE publications SET status=?, message_id=COALESCE(?,message_id),
                     verified_at=?, last_detail=?, updated_at=? WHERE content_id=?
             """, (status.value, message_id, now, detail, now, content_id))
-            if con.total_changes == 0:
+            if cur.rowcount == 0:
                 raise KeyError(f"Publicação inexistente: {content_id}")
 
     def get_publication(self, content_id: str) -> dict | None:
