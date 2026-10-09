@@ -4,8 +4,8 @@ import logging
 from collections import Counter
 from typing import Any
 
-from .models import State
-from .services import IngestMessage
+from armored_core.models import State
+from armored_core.services import IngestMessage
 
 log = logging.getLogger(__name__)
 
