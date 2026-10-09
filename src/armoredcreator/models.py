@@ -8,6 +8,7 @@ from pathlib import Path
 class ItemState(StrEnum):
     RECEIVED = "RECEIVED"
     VISION = "VISION"
+    READY = "READY"
     WAITING_VISION = "WAITING_VISION"
     DOWNLOADING = "DOWNLOADING"
     PROCESSING = "PROCESSING"
