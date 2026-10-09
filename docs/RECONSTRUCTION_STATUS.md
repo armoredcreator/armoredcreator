@@ -20,7 +20,7 @@
 - **ArmoredStock** como ferramenta de linha de comando independente, reutilizando o Coordinator e a mesma implementação canônica da etapa `stock` para evitar lógica duplicada.
 - Configuração de exemplo, launcher, documentação e testes textuais.
 
-O pipeline de orquestração e o gerador de legendas foram reimplementados nesta reconstrução em vez de copiados literalmente. Devem ser tratados como código novo até a suíte validar o contrato completo.
+O pipeline de orquestração e o gerador de legendas foram restaurados a partir do branch de referência `fix/global-discovery-vision-download-production-20261009` após a comparação revelar divergências na primeira portagem. A suíte completa deste repositório precisa confirmar a compatibilidade.
 
 ## Contrato do ArmoredStock
 
