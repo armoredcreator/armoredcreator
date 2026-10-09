@@ -1,8 +1,8 @@
 # Assets do Studio
 
-Os arquivos binários originais não foram incluídos nesta portagem:
+Os assets originais do projeto estão versionados nesta pasta:
 
-- `banner.png`
-- `efeitosonoro.wav`
+- `banner.png` — banner usado pelo Studio.
+- `efeitosonoro.wav` — efeito sonoro original aplicado pelo processamento de áudio.
 
-Copie os arquivos originais de `armoredcreator-audio-lab/ArmoredStudio/assets/` para esta pasta. Não substitua o efeito sonoro por um arquivo arbitrário: ele faz parte do resultado de áudio esperado pelo projeto.
+Não substituir esses arquivos por versões arbitrárias: eles fazem parte do resultado visual e sonoro esperado pelo projeto.
