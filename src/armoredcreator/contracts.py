@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol, Sequence
+from typing import Protocol
 
-from .models import AudioDecision, Candidate, Verification, VisionResult
+from .models import AudioDecision, Candidate, DiscoveryPage, Verification, VisionResult
 
 
 class SyncAdapter(Protocol):
-    def discover(self, source_id: int, after_message_id: int) -> Sequence[Candidate]: ...
+    def discover(self, source_id: int, after_message_id: int) -> DiscoveryPage: ...
 
 
 class VisionAdapter(Protocol):
