@@ -5,7 +5,7 @@ import logging
 import os
 from pathlib import Path
 
-from armored_core.armored_stock import ArmoredStock
+from ArmoredStock.service import ArmoredStock
 from armored_core.coordinator import Coordinator
 
 
