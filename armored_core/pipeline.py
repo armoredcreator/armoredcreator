@@ -67,7 +67,7 @@ class Pipeline:
         try:
             self._check_shutdown()
             item = self.db.get(item_id)
-            if not item.affiliate_url:
+            if not str(item.affiliate_url or "").strip():
                 self.db.transition(item_id, State.VISION, "vision-start")
                 try:
                     vision_result = self.vision.identify(item)
@@ -181,7 +181,13 @@ class Pipeline:
         except Exception as exc:
             self.log.exception("Pipeline item %s failed", item_id)
             try:
-                self.db.transition(item_id, State.RECOVERY, f"{type(exc).__name__}: {exc}")
+                current = self.db.get(item_id)
+                # Before ORIGINAL exists, a technical Vision error stays at VISION
+                # so the staged catch-up can retry without pretending media work began.
+                if stop_after_vision and current.state == State.VISION and not Path(current.original_path).is_file():
+                    self.db.record_retryable_error(item_id, f"{type(exc).__name__}: {exc}")
+                else:
+                    self.db.transition(item_id, State.RECOVERY, f"{type(exc).__name__}: {exc}")
             except Exception:
                 self.db.record_retryable_error(item_id, f"{type(exc).__name__}: {exc}")
             raise
