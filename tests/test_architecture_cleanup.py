@@ -23,6 +23,7 @@ PRODUCTION_DIRS = (
     ROOT / "ArmoredIA",
     ROOT / "ArmoredStudio",
     ROOT / "ArmoredHub",
+    ROOT / "ArmoredStock",
     ROOT / "armored_core",
 )
 
@@ -112,3 +113,24 @@ def test_armored_ia_is_the_only_caption_runtime_boundary():
     assert (ROOT / "ArmoredIA" / "service.py").is_file()
     assert not (ROOT / "ArmoredVision" / "modules" / "caption").exists()
     assert not (ROOT / "ArmoredVision" / "modules" / "v1" / "caption").exists()
+
+
+def test_armored_stock_is_a_standalone_production_tool():
+    assert (ROOT / "ArmoredStock" / "__init__.py").is_file()
+    assert (ROOT / "ArmoredStock" / "service.py").is_file()
+    launcher = (ROOT / "run_armored_stock.py").read_text(encoding="utf-8")
+    assert "from ArmoredStock.service import ArmoredStock" in launcher
+    assert not (ROOT / "armored_core" / "armored_stock.py").exists()
+
+
+def test_obsolete_experiment_artifacts_are_removed():
+    assert not (ROOT / "scripts").exists()
+    assert not (ROOT / "requirements-web-discovery.txt").exists()
+
+
+def test_studio_asset_documentation_matches_committed_assets():
+    assets = ROOT / "ArmoredStudio" / "assets"
+    assert (assets / "banner.png").is_file()
+    assert (assets / "efeitosonoro.wav").is_file()
+    readme = (assets / "README.md").read_text(encoding="utf-8")
+    assert "não foram incluídos" not in readme.lower()
