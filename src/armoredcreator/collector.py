@@ -46,16 +46,22 @@ class HistoricalCollector:
                 blocked = candidate.message_id
                 break
             publication = self.db.get_publication(candidate.content_id)
-            if publication and publication["status"] != "CONFIRMED":
-                blocked = candidate.message_id
-                break
-            state = item["state"]
-            if state in (ItemState.READY.value, ItemState.WAITING_VISION.value,
-                         ItemState.PUBLISHED.value):
-                outcome = state
+            if publication:
+                if publication["status"] != "CONFIRMED" or not publication["message_id"]:
+                    blocked = candidate.message_id
+                    break
+                if item["state"] != ItemState.PUBLISHED.value:
+                    self.db.transition(candidate.content_id, ItemState.PUBLISHED,
+                                       detail={"reconciled_from_persisted_confirmation": True})
+                outcome = ItemState.PUBLISHED.value
             else:
-                outcome = self.coordinator.validate_one(candidate.content_id)
-                validated += 1
+                state = item["state"]
+                if state in (ItemState.READY.value, ItemState.WAITING_VISION.value,
+                             ItemState.PUBLISHED.value):
+                    outcome = state
+                else:
+                    outcome = self.coordinator.validate_one(candidate.content_id)
+                    validated += 1
             if outcome == ItemState.WAITING_VISION.value:
                 waiting += 1
             if outcome not in (ItemState.READY.value, ItemState.WAITING_VISION.value,
