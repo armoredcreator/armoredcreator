@@ -58,6 +58,13 @@ class Candidate:
 
 
 @dataclass(frozen=True)
+class DiscoveryPage:
+    candidates: tuple[Candidate, ...]
+    high_watermark: int
+    history_exhausted: bool
+
+
+@dataclass(frozen=True)
 class VisionResult:
     status: VisionStatus
     affiliate_url: str | None
