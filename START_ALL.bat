@@ -19,17 +19,14 @@ set "ARMORED_IA_MAX_CANDIDATES=10"
 set "ARMORED_IA_MAX_ATTEMPTS=5"
 set "ARMORED_IA_RETRY_DELAY=2"
 
-rem Caminho do Telegram Bot API nesta maquina.
-rem Para outra maquina, altere somente esta linha.
-set "BOT_API_EXE=C:\Users\Administrador\Downloads\TelegramBotAPI\telegram-bot-api\build\Release\telegram-bot-api.exe"
+rem O caminho do Bot API é específico da máquina e vem de credentials\project.env.
+set "BOT_API_EXE="
 set "BOT_API_PORT=8081"
 set "ARMORED_TELEGRAM_BOT_API_URL=http://127.0.0.1:%BOT_API_PORT%/bot"
 set "ARMORED_TELEGRAM_BOT_API_FILE_URL=http://127.0.0.1:%BOT_API_PORT%/file/bot"
 set "BOT_API_STARTED_BY_SCRIPT=0"
 set "BOT_API_PID="
 set "BOT_API_DIR="
-
-for %%I in ("%BOT_API_EXE%") do set "BOT_API_DIR=%%~dpI"
 
 rem ================================================================
 rem 1. Carrega API ID/HASH do credentials\project.env
@@ -40,6 +37,17 @@ if not exist "%ARMORED_ROOT%credentials\project.env" (
     echo ERRO: credentials\project.env nao encontrado.
     exit /b 1
 )
+
+for /f "delims=" %%A in ('powershell -NoProfile -Command "$v=Get-Content -LiteralPath '%ARMORED_ROOT%credentials\\project.env' | ForEach-Object { $_ -replace '^\\uFEFF','' } | Where-Object { $_ -match '^BOT_API_EXE=' } | Select-Object -First 1; if($v){$v -replace '^BOT_API_EXE=',''}"') do set "BOT_API_EXE=%%A"
+for /f "delims=" %%A in ('powershell -NoProfile -Command "$v=Get-Content -LiteralPath '%ARMORED_ROOT%credentials\\project.env' | ForEach-Object { $_ -replace '^\\uFEFF','' } | Where-Object { $_ -match '^BOT_API_PORT=' } | Select-Object -First 1; if($v){$v -replace '^BOT_API_PORT=',''}"') do set "BOT_API_PORT=%%A"
+if not defined BOT_API_PORT set "BOT_API_PORT=8081"
+if not defined BOT_API_EXE (
+    echo ERRO: configure BOT_API_EXE em credentials\project.env.
+    exit /b 1
+)
+set "ARMORED_TELEGRAM_BOT_API_URL=http://127.0.0.1:%BOT_API_PORT%/bot"
+set "ARMORED_TELEGRAM_BOT_API_FILE_URL=http://127.0.0.1:%BOT_API_PORT%/file/bot"
+for %%I in ("%BOT_API_EXE%") do set "BOT_API_DIR=%%~dpI"
 
 for /f "delims=" %%A in ('powershell -NoProfile -Command "$v=Get-Content -LiteralPath '%ARMORED_ROOT%credentials\\project.env' | ForEach-Object { $_ -replace '^\\uFEFF','' } | Where-Object { $_ -match '^TELEGRAM_API_ID=' } | Select-Object -First 1; if($v){$v -replace '^TELEGRAM_API_ID=',''}"') do set "TELEGRAM_API_ID=%%A"
 for /f "delims=" %%A in ('powershell -NoProfile -Command "$v=Get-Content -LiteralPath '%ARMORED_ROOT%credentials\\project.env' | ForEach-Object { $_ -replace '^\\uFEFF','' } | Where-Object { $_ -match '^TELEGRAM_API_HASH=' } | Select-Object -First 1; if($v){$v -replace '^TELEGRAM_API_HASH=',''}"') do set "TELEGRAM_API_HASH=%%A"
