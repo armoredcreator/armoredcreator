@@ -73,3 +73,5 @@ Os assets originais `ArmoredStudio/assets/banner.png` e `ArmoredStudio/assets/ef
 ## Estado
 
 Os repositórios de referência `armoredcreator-test` e `armoredcreator-testbase` permanecem intocados. A certificação mais recente, incluindo a execução real controlada do fluxo Telegram → Vision → download → Studio → Hub e os comandos de teste, está em [`docs/RELEASE_CERTIFICATION.md`](docs/RELEASE_CERTIFICATION.md). O status técnico detalhado está em [`docs/RECONSTRUCTION_STATUS.md`](docs/RECONSTRUCTION_STATUS.md).
+
+O estado do catch-up real iniciado nesta máquina, os gates que ainda faltam e as instruções seguras para monitorar ou retomar estão em [`docs/OPERACAO_EM_ANDAMENTO.md`](docs/OPERACAO_EM_ANDAMENTO.md). O estado operacional autoritativo permanece no SQLite local.
