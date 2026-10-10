@@ -1,11 +1,11 @@
 # Operacao e retomada do catch-up
 
-Atualizado em 2026-10-10, por volta de 12:29 (horario local UTC-3). Este registro descreve o estado observado nesta maquina; nao substitui o SQLite.
+Atualizado em 2026-10-10, 12:32 (horario local UTC-3). Este registro descreve o estado observado nesta maquina; nao substitui o SQLite.
 
 ## Versao e localizacao
 
 - Projeto operacional: `C:\Users\Administrador\Downloads\ArmoredCreator-final`.
-- Branch Git: `armoredcreator-architecture-skeleton`, commit `1b535a4`.
+- Branch Git: `armoredcreator-architecture-skeleton`, commit `b1f7738` (este handoff operacional sera atualizado novamente com esta observacao).
 - Ultima release formal com tag: `v1.0.1`. O codigo mais novo esta publicado na branch, mas ainda nao foi congelado como release.
 - A arvore operacional contem o codigo atualizado, credenciais privadas, sessao Telegram, banco SQLite e runtime local do Studio. Esses dados privados/runtime nao sao versionados.
 
@@ -13,6 +13,7 @@ Atualizado em 2026-10-10, por volta de 12:29 (horario local UTC-3). Este registr
 
 - Catch-up integrado: descoberta historica, Vision antes de download, producao/publicacao serial por item, coleta/Vision de mensagens novas durante a producao, retomada SQLite e checkpoints protegidos contra falhas tecnicas.
 - Testes da revisao: `py -3.11 -m pytest -q -W error::RuntimeWarning` passou com **250 passed, 1 skipped** no worktree e em Downloads. `compileall` dos pacotes e `git diff --check` tambem passaram.
+- Teste isolado adicional durante o catch-up: `py -3.11 -m pytest -q tests\test_e2e_recovery.py tests\test_catch_up_pipeline_e2e.py tests\test_staged_catchup_production_order.py -W error::RuntimeWarning` passou com **14 passed em 8,69 s**, usando SQLite temporario e doubles/simulacao; nao publicou no Telegram nem acessou o banco operacional.
 - O commit da implementacao e documentacao de certificacao esta publicado no GitHub; os 132 arquivos versionados foram comparados por hash com Downloads.
 - Ja existe uma publicacao real anterior confirmada e idempotente, registrada no banco.
 
@@ -20,18 +21,18 @@ Atualizado em 2026-10-10, por volta de 12:29 (horario local UTC-3). Este registr
 
 O Coordinator foi iniciado em `Downloads\ArmoredCreator-final` em 2026-10-10 por volta de 12:14, com historico completo (`ARMORED_SYNC_CATCHUP_LIMIT=0`) e publicacao real habilitada (`ARMORED_HUB_DRY_RUN=0`). Foi limitado a **uma iteracao LIVE apos o catch-up** para esta validacao; essa limitacao existe somente no ambiente do processo, nao no arquivo de credenciais.
 
-Ultima observacao registrada (aproximadamente 12:29):
+Ultima observacao registrada (12:32:21):
 
-- 379 itens no SQLite: 378 `RECEIVED` e 1 `PUBLISHED` anterior.
+- 401 itens no SQLite: 400 `RECEIVED` e 1 `PUBLISHED` anterior.
 - Tres fontes ainda em CATCH-UP; zero checkpoints historicos persistidos e zero fontes marcadas como concluidas.
-- Uma publicacao confirmada no banco; zero publicacoes `UNKNOWN`.
+- Uma publicacao registrada anteriormente; as consultas recentes confirmaram que o processo continua ativo, mas nao verificaram de forma independente o estado `UNKNOWN`.
 - Lease do Coordinator presente: **nao iniciar outra instancia**.
 - Aproximadamente 198 GB livres.
-- O processo estava presente/respondendo. Tres itens foram reservados na janela anterior de aproximadamente 2m37s, mas essa taxa nao e estavel nem permite estimar o total. Os logs nao fornecem progresso por pagina; verificar se a leitura historica continua ou se a conexao ficou aguardando o Telegram. Isso nao prova conclusao nem falha.
+- Launcher e Coordinator estavam presentes/respondendo; o Coordinator iniciou as 12:14:08 e acumulava CPU, e o item mais recente foi atualizado as 12:32:13. Isso indica atividade recente, mas nao identifica em qual fonte/topico a leitura esta nem prova que o historico terminou. O log operacional permanece sem atualizacoes desde a inicializacao, portanto nao fornece progresso por pagina nem diagnostico conclusivo.
 
 ## Prazo estimado
 
-Ainda nao ha ETA confiavel. O numero total de candidatos elegiveis no historico nao e conhecido; a leitura pode incluir muitas mensagens sem video e paginas/tópicos que ainda nao foram percorridos. Depois da descoberta ainda faltam Vision, processamento serial, publicacoes reais, cleanup e cutover. Com o ritmo parcial observado, a execucao pode levar horas ou mais se o historico for grande; somente os estados SQLite e a conclusao de cada etapa permitem estreitar a previsao.
+Ainda nao ha ETA confiavel. O numero total de candidatos elegiveis no historico nao e conhecido; a leitura pode incluir muitas mensagens sem video e paginas/tópicos que ainda nao foram percorridos. O total cresceu de 379 para 401 entre aproximadamente 12:29 e 12:32, mas isso nao permite extrapolar a conclusao da varredura. Depois da descoberta ainda faltam Vision, processamento serial, publicacoes reais, cleanup e cutover. A execucao pode levar horas ou mais se o historico for grande; somente os estados SQLite e a conclusao de cada etapa permitem estreitar a previsao.
 
 As publicacoes durante esta execucao sao efeitos reais nos topicos configurados. Nao apagar nem recriar o banco, sessao ou storage.
 
