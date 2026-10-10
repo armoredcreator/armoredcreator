@@ -54,7 +54,10 @@ class PublicationCrashTests(unittest.TestCase):
                 self.assertEqual(publisher.calls,1)
                 self.assertEqual(db.publication(item)["published_message_id"], "telegram-telegram-1")
                 self.assertTrue(row.original_path.exists())
-                self.assertEqual([p.name for p in row.workspace.iterdir()],[row.original_path.name])
+                self.assertEqual(
+                    {p.name for p in row.workspace.iterdir()},
+                    {row.original_path.name, row.result_path.name},
+                )
             finally:
                 db.close()
 

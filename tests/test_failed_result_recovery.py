@@ -69,14 +69,13 @@ class FailedResultRecoveryTests(unittest.TestCase):
                 self.assertEqual(row.state, State.PUBLISHED)
                 self.assertEqual(publisher.calls, 1)
 
-                # Recovery publishes the durable result and then performs the
-                # normal successful cleanup. The original remains permanent;
-                # derived/result artifacts are removed.
-                self.assertFalse(result.exists())
+                # Recovery publishes the durable result and removes only
+                # temporary derived artifacts; the published result is kept.
+                self.assertTrue(result.is_file())
                 self.assertTrue(original.exists())
                 self.assertEqual(
-                    [p.name for p in row.workspace.iterdir()],
-                    [original.name],
+                    {p.name for p in row.workspace.iterdir()},
+                    {original.name, result.name},
                 )
 
                 events = [

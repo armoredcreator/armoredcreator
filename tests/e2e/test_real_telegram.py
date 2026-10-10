@@ -76,7 +76,10 @@ class RealTelegramE2ETests(unittest.TestCase):
             self.assertEqual(after, before)
 
             files = [path.name for path in item.workspace.iterdir()]
-            self.assertEqual(files, [item.original_path.name])
+            self.assertEqual(
+                set(files),
+                {item.original_path.name, item.result_path.name},
+            )
         finally:
             reader = getattr(source, "reader", None)
             if reader is not None:

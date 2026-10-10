@@ -74,7 +74,10 @@ class EndToEndRecoveryTests(unittest.TestCase):
                 self.assertEqual(row.state,State.PUBLISHED)
                 self.assertEqual(row.original_path.read_bytes(),original)
                 self.assertEqual(publisher.count,1)
-                self.assertEqual([p.name for p in row.workspace.iterdir()],[row.original_path.name])
+                self.assertEqual(
+                    {p.name for p in row.workspace.iterdir()},
+                    {row.original_path.name, row.result_path.name},
+                )
                 events=[r["new_state"] for r in coordinator.db.conn.execute("SELECT new_state FROM state_events WHERE content_id=? ORDER BY id",(item_id,)).fetchall()]
                 self.assertIn(State.VISION.value,events); self.assertIn(State.STUDIO.value,events)
                 self.assertIn(State.PUBLISHING.value,events); self.assertIn(State.RECOVERY.value,events)
@@ -111,7 +114,10 @@ class EndToEndRecoveryTests(unittest.TestCase):
                 self.assertEqual(recovered.count,0)
                 self.assertEqual(coordinator.db.publication(item_id)["published_message_id"],"e2e-message-e2e-100")
                 self.assertTrue(row.original_path.exists())
-                self.assertEqual([p.name for p in row.workspace.iterdir()],[row.original_path.name])
+                self.assertEqual(
+                    {p.name for p in row.workspace.iterdir()},
+                    {row.original_path.name, row.result_path.name},
+                )
                 coordinator.run(item_id)
                 self.assertEqual(recovered.count,0)
                 coordinator.close()
@@ -165,8 +171,8 @@ class EndToEndRecoveryTests(unittest.TestCase):
                 self.assertEqual(recovered_publisher.count,0)
                 self.assertTrue(row.original_path.exists())
                 self.assertEqual(
-                    [p.name for p in row.workspace.iterdir()],
-                    [row.original_path.name],
+                    {p.name for p in row.workspace.iterdir()},
+                    {row.original_path.name, row.result_path.name},
                 )
                 pub=coordinator.db.publication(item_id)
                 self.assertEqual(pub["published_message_id"],f"e2e-message-{item_id}")
@@ -226,7 +232,10 @@ class EndToEndRecoveryTests(unittest.TestCase):
             self.assertEqual(vision.count, 0)
             self.assertEqual(publisher.count, 1)
             self.assertTrue(row.original_path.exists())
-            self.assertEqual([p.name for p in row.workspace.iterdir()], [row.original_path.name])
+            self.assertEqual(
+                {p.name for p in row.workspace.iterdir()},
+                {row.original_path.name, row.result_path.name},
+            )
             coordinator.close()
 
     def test_recovery_without_result_rebuilds_from_original(self):
@@ -270,7 +279,10 @@ class EndToEndRecoveryTests(unittest.TestCase):
             self.assertEqual(studio.count, 1)
             self.assertEqual(publisher.count, 1)
             self.assertTrue(row.original_path.exists())
-            self.assertEqual([p.name for p in row.workspace.iterdir()], [row.original_path.name])
+            self.assertEqual(
+                {p.name for p in row.workspace.iterdir()},
+                {row.original_path.name, row.result_path.name},
+            )
             coordinator.close()
 
     def test_catch_up_blocks_next_candidate_when_recovery_remains_unknown(self):

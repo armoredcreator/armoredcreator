@@ -16,7 +16,7 @@ A visão geral está em [`docs/VISAO_GERAL_ARMORED_CREATOR.md`](docs/VISAO_GERAL
 - Cada fonte mantém roteamento e workspace separados: `storage/Videos GRUPO_FONTE_1`, `storage/Videos GRUPO_FONTE_2`, `storage/Videos GRUPO_FONTE_3`.
 - **Áudio**: RVC somente para narração PT-BR confirmada com confiança suficiente. Fala estrangeira, música, silêncio ou classificação incerta não chamam RVC; o áudio original é silenciado e o efeito original do projeto é aplicado.
 - **Hub** reconcilia publicação. `UNKNOWN` nunca é republicado automaticamente.
-- **Cleanup** somente após publicação confirmada; o ORIGINAL é preservado como evidência de recuperação.
+- **Cleanup** somente após publicação confirmada; ORIGINAL e vídeo FINAL publicado são preservados. Somente arquivos temporários derivados são removidos.
 - **ArmoredStock** é uma ferramenta independente em `ArmoredStock/service.py`. Ela usa o Coordinator e SQLite existentes para materializar, um por vez, somente originais aprovados pela Vision. Não executa IA, Studio/RVC, Hub, publicação, cleanup nem cutover para LIVE.
 
 ## Coleta histórica por etapas

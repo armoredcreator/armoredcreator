@@ -377,15 +377,18 @@ class Pipeline:
             raise RuntimeError("cleanup-is-allowed-only-after-PUBLISHED")
         workspace = item.workspace.resolve()
         original = item.original_path.resolve()
+        result = item.result_path.resolve() if item.result_path is not None else None
         if workspace != original.parent.resolve():
             raise RuntimeError("cleanup-workspace-mismatch")
+        if result is not None and result.parent != workspace:
+            raise RuntimeError("cleanup-result-workspace-mismatch")
         with self.trace.stage(item_id, "CLEANUP"):
             if not workspace.is_dir():
                 self.db.mark_cleanup_completed(item_id)
                 return
             for path in workspace.iterdir():
                 resolved = path.resolve()
-                if resolved == original:
+                if resolved == original or resolved == result:
                     continue
                 if path.is_dir():
                     shutil.rmtree(path)

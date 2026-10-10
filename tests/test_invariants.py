@@ -53,7 +53,12 @@ class InvariantTests(unittest.TestCase):
             original = db.get(i).original_path
             Pipeline(db, st, V(), S(st), P()).run(i)
             self.assertEqual(original.read_bytes(), b"IMMUTABLE")
-            self.assertEqual(list(original.parent.iterdir()), [original])
+            row = db.get(i)
+            self.assertTrue(row.result_path.is_file())
+            self.assertEqual(
+                {path.name for path in original.parent.iterdir()},
+                {original.name, row.result_path.name},
+            )
             db.close()
 
     def test_database_keeps_original_hash_attempts_and_recovery_metadata(self):
@@ -114,7 +119,10 @@ class InvariantTests(unittest.TestCase):
             self.assertEqual(item.original_path.read_bytes(), b"TELEGRAM-BYTES")
             self.assertEqual(item.original_sha256, hashlib.sha256(b"TELEGRAM-BYTES").hexdigest())
             self.assertFalse((root / "storage" / "sync").exists())
-            self.assertEqual([p.name for p in item.workspace.iterdir()], ["1383_finallinkoriginal.mp4"])
+            self.assertEqual(
+                [p.name for p in item.workspace.iterdir()],
+                [item.original_path.name],
+            )
             db.close()
 
     def test_missing_original_blocks_processing(self):

@@ -51,12 +51,16 @@ class PipelineTests(unittest.TestCase):
         self.db.close()
         self.td.cleanup()
 
-    def test_happy_path_keeps_only_original(self):
+    def test_happy_path_keeps_original_and_published_result(self):
         Pipeline(self.db, self.storage, Vision(), Studio(self.storage), self.pub).run(self.item)
         row = self.db.get(self.item)
         self.assertEqual(row.state, State.PUBLISHED)
         self.assertEqual(row.original_path.read_bytes(), b"VIDEO")
-        self.assertEqual([p.name for p in row.workspace.iterdir()], [row.original_path.name])
+        self.assertTrue(row.result_path.is_file())
+        self.assertEqual(
+            {p.name for p in row.workspace.iterdir()},
+            {row.original_path.name, row.result_path.name},
+        )
         self.assertEqual(self.pub.count, 1)
         self.assertTrue(row.working_path is not None)
         self.assertTrue(row.result_path is not None)
