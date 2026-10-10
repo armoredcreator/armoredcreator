@@ -18,16 +18,33 @@ py -3.11 -m pytest -q -W error::RuntimeWarning
 
 Resultado da release `v1.0.1`: **243 passed, 1 skipped**. A revisao publicada na branch terminou em **250 passed, 1 skipped** no worktree e em `C:\Users\Administrador\Downloads\ArmoredCreator-final`; warnings de runtime foram tratados como erros. Os sete novos casos verificam checkpoint da descoberta sem cutover, concorrencia deterministica de descoberta/Vision durante Studio, falha de Vision concorrente sem avancar checkpoint, limite de catch-up sem ativar descoberta LIVE, producao serial por item, bloqueio apos falha historica de Vision e tratamento terminal `WAITING_VISION`. O teste concorrente usa fontes e servicos simulados: nao certifica a estabilidade do Telegram real sob longa operacao.
 
-## Ensaio ponta a ponta isolado com Studio real
+## Ensaio ponta a ponta isolado: caminho LIVE com Studio real
 
-Em 2026-10-10 foi executado um item de teste em diretorio temporario, sem abrir nem alterar o banco operacional do catch-up:
+Executado em 2026-10-10, sem aguardar postagem espontanea e sem acessar o SQLite, a sessao ou os destinos Telegram de producao:
 
-1. FFmpeg gerou um MP4 sintetico vertical, sem audio. O SQLite, workspace e assets foram isolados sob um diretorio temporario, removido ao fim do ensaio.
-2. O caminho integrado de catch-up reservou o item, chamou Vision antes da materializacao, e so entao persistiu o original. Vision foi simulada e verificou explicitamente que o original ainda nao existia.
-3. `ArmoredStudio` real executou analise e exportacao usando os assets locais `banner.png` e `efeitosonoro.wav`; o MP4 final foi decodificado por FFmpeg sem erro.
-4. Publisher foi simulado: confirmou uma publicacao com ID sintetico. O item terminou `PUBLISHED`, cleanup foi concluido, ORIGINAL e FINAL permaneceram, e repetir o pipeline nao publicou novamente (uma chamada total).
+1. **Isolamento:** Python 3.11 criou um diretorio temporario com seu proprio SQLite, workspace, assets copiados e dados de checkpoint. O diretorio foi removido automaticamente ao terminar. Nenhum item da fila real foi consultado ou baixado.
+2. **Midia sintetica:** FFmpeg gerou localmente um MP4 vertical de 720x1280, 24 fps e 3 segundos, usando padrao de cor verde, H.264 e sem audio. A ausencia de audio exercita o caminho sem voz/RVC; nao substitui os ensaios com fala.
+3. **Injecao LIVE controlada:** um adaptador de teste entregou ao metodo real `Coordinator.run_live_once_async()` exatamente um candidato sintetico, identificado pela fonte de teste e topico 777. O checkpoint temporario com valor 9000 so avancou para 9001 apos o processamento completo.
+4. **Ordem Vision/download:** Vision foi substituida por um double deterministico, que verifica como pre-condicao que o ORIGINAL ainda nao existe e retorna dados de afiliado sinteticos. So depois dessa decisao o callback de materializacao copiou a midia sintetica para o workspace.
+5. **Sessao e isolamento por etapa:** o Reader de teste conectou antes da descoberta/materializacao e desconectou antes da producao/Hub (1 conexao e 1 desconexao). Nao houve login ou trafego de rede Telegram.
+6. **Studio real:** a instancia `ArmoredStudio` executou o analisador, Audio Intelligence e exportador reais do repositorio, com `banner.png`, `efeitosonoro.wav` e FFmpeg. O modo sem audio foi exercitado; RVC nao deveria ser acionado para esse input.
+7. **Publicacao simulada:** o Publisher de teste retornou confirmacao e ID sintetico, sem fazer upload externo. O estado final no banco temporario foi `PUBLISHED`; cleanup foi marcado completo e ORIGINAL e FINAL foram preservados.
+8. **Arquivo e idempotencia:** FFmpeg abriu/decodificou o FINAL sem erro. Uma segunda consulta LIVE nao encontrou novo candidato e nao repetiu a publicacao; total de chamadas de `publish` permaneceu 1.
+9. **Resultado observado:** `LIVE_COORDINATOR_SYNTHETIC_E2E=PASS`, `vision_before_download=PASS`, `studio_real=PASS`, `hub_simulated_confirmed=PASS`, `published_and_cleanup=PASS`, `checkpoint_after_success=9001`, `final_ffmpeg_probe=PASS`, `second_live_poll_no_duplicate=PASS`, `external_messages_sent=0`, `temporary_database_removed=True`.
 
-Resultado: `E2E=PASS`, Vision-before-download, Studio real, validacao do arquivo final e idempotencia no pipeline. Limite: esta prova nao chamou Shopee Vision nem Telegram Hub reais; as integracoes reais sao cobertas apenas pela publicacao controlada documentada abaixo e pelo ensaio real anterior, nao por este item sintetico. A prova tambem nao certifica a matriz de audio falado/RVC.
+Houve duas falhas apenas no harness antes do resultado final: uma primeira prova chamou a API de ingestao direta, que nao representa o gate Vision de catch-up; outra comparou o ID retornado com o ID bruto, ignorando o namespace da fonte. Ambos os harnesses foram corrigidos e seus diretorios temporarios descartados; a execucao LIVE acima foi repetida com a identidade escopada correta e passou. Nenhum erro de produto, mensagem externa ou alteracao do banco real resultou dessas tentativas.
+
+**Conclusao exata:** o Coordinator percorreu o caminho LIVE real do codigo e completou uma mensagem injetada deterministicamente com Studio real, em ambiente privado local e ponta a ponta ate uma confirmacao simulada. Esta prova nao chamou Shopee Vision real nem Telegram Hub real. Nao havia rota privada Telegram de teste configurada; por isso nao e seguro enviar o video sintetico para os destinos de producao. Existe uma publicacao real individual anterior documentada abaixo, mas ela nao transforma este ensaio em validacao de ponta a ponta de rede em LIVE. A matriz de audio falado/RVC tambem continua pendente.
+
+## Testes automatizados de LIVE
+
+Comando executado em 2026-10-10:
+
+```powershell
+py -3.11 -m pytest -q tests\test_live_polling_rate.py tests\test_live_reconnect.py tests\test_live_reconnect_watchdog.py -W error::RuntimeWarning
+```
+
+Resultado: **5 passed em 1,72 s**. A cobertura verificou round-robin de topicos, descoberta/materializacao e conclusao de um candidato por ciclo, tratamento de erro temporario com nova tentativa e reconexao apos timeout do watchdog. As fontes e as confirmacoes externas nesses testes sao simuladas. Nao e um soak test do Telethon real.
 
 ## Validacao real controlada
 
