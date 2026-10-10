@@ -2,7 +2,8 @@
 
 ## Release
 
-- Versao inicial congelada: `v1.0.0`; versao corrigida de retencao: `v1.0.1`.
+- Ultima release publicada: `v1.0.1`.
+- Revisao de catch-up integrado em validacao: ainda nao publicada; nao representa o estado da tag.
 - Branch: `armoredcreator-architecture-skeleton`.
 - Runtime de referencia: Windows, Python 3.11.
 - O codigo e os assets versionados foram separados deliberadamente de credenciais, sessao Telegram, banco operacional, logs, videos e do runtime/modelos RVC instalados nesta maquina.
@@ -15,7 +16,7 @@ Executado na arvore de codigo do release:
 py -3.11 -m pytest -q -W error::RuntimeWarning
 ```
 
-Resultado na versao `v1.0.1`: **243 passed, 1 skipped**. Warnings de runtime foram tratados como erros. A suite inclui testes para schema/migracao SQLite, recuperacao apos restart, coleta historica, Vision antes do download, isolamento por fonte, limites do ArmoredStock, classificacao de audio, Studio, Hub, reconciliacao de publicacao, resultado `UNKNOWN`, retomada idempotente e preservacao do original e do resultado final apos cleanup.
+Resultado da release publicada `v1.0.1`: **243 passed, 1 skipped**. Na revisao local nao publicada do catch-up integrado, o mesmo comando terminou em **249 passed, 1 skipped**; warnings de runtime foram tratados como erros. Os seis novos casos verificam checkpoint da descoberta sem cutover, concorrencia deterministica de descoberta/Vision durante Studio, falha de Vision concorrente sem avancar checkpoint, producao serial por item, bloqueio apos falha historica de Vision e tratamento terminal `WAITING_VISION`. O teste concorrente usa fontes e servicos simulados: nao certifica a estabilidade do Telegram real sob longa operacao.
 
 ## Validacao real controlada
 
@@ -53,7 +54,7 @@ Para iniciar a operacao continua automatizada, executar na raiz do projeto:
 
 O launcher verifica ou inicia o Telegram Bot API local e inicia o Coordinator. O Coordinator usa SQLite, executa a descoberta/recuperacao pendente e segue para o monitoramento continuo; o processamento de producao e publicacao real fica habilitado quando `ARMORED_HUB_DRY_RUN=0`.
 
-As etapas historicas tambem podem ser executadas e inspecionadas separadamente, sem iniciar Studio ou publicacao:
+As etapas historicas de diagnostico tambem podem ser executadas separadamente, sem iniciar Studio ou publicacao:
 
 ```powershell
 python .\run_catchup_stage.py sync
@@ -61,7 +62,7 @@ python .\run_catchup_stage.py vision
 python .\run_catchup_stage.py stock
 ```
 
-`sync` com `ARMORED_SYNC_CATCHUP_LIMIT=0` percorre o historico completo e pode ser longo. As etapas staged preservam o estado SQLite; nao apague o banco para repetir uma etapa. Depois de revisar os resultados, inicie a operacao continua com `.\START_ALL.bat`.
+`sync` com `ARMORED_SYNC_CATCHUP_LIMIT=0` percorre o historico completo e pode ser longo. As etapas staged preservam o estado SQLite; nao apague o banco para repetir uma etapa. O fluxo integrado normal e `.\START_ALL.bat`; o Coordinator preserva as reservas/checkpoints, descobre e valida mensagens novas durante a producao e termina um item aprovado antes de baixar o proximo.
 
 ## Limites do que foi certificado
 
@@ -69,4 +70,12 @@ A execucao real prova um percurso completo de um item e o comportamento de recon
 
 O arquivo final da publicacao controlada em `v1.0.0` foi removido pelo cleanup anterior e nao pode ser restaurado sem reprocessar o original. A partir de `v1.0.1`, o cleanup preserva o original e o resultado publicado, removendo apenas os artefatos temporarios do workspace. Essa mudanca de retencao foi verificada pela suite automatizada; nao foi feita uma segunda publicacao real so para testar a politica de limpeza. Manter todos os resultados finais aumenta o uso de disco e exige monitoramento no notebook.
 
-A coleta historica e a producao sao estagios ordenados, nao dois loops paralelos: o fluxo atual completa descoberta, Vision e materializacao serial do catch-up antes da producao historica; LIVE comeca depois do cutover. A coleta de mensagens novas simultanea com producao historica ainda nao esta implementada/validada.
+A revisao local adiciona descoberta/Vision de mensagens novas em paralelo a producao historica; a sessao Telegram e liberada antes do Hub usar a mesma sessao, e a producao Studio/Hub executa com uma conexao SQLite propria. A cobertura de concorrencia e de checkpoints e automatizada com servicos simulados; a coleta historica completa real e a operacao LIVE prolongada ainda nao foram executadas nesta revisao.
+
+## Validacao pendente para certificacao operacional
+
+- Catch-up real completo nas tres fontes; o historico pode ser extenso, consumir disco e gerar publicacoes reais. Monitorar execucao, erros e espaco livre antes de iniciar.
+- Operacao real prolongada apos cutover e confirmacao de que mensagens novas continuam sendo ingeridas sem atrasos/perdas.
+- Matriz de audio em amostras autorizadas PT-BR, fala estrangeira, musica e sem audio; a verificacao real anterior cobriu apenas um clipe classificado como `MUSIC_ONLY`, sem gate RVC.
+- Throughput/retencao de originais e finais em lote. A politica preserva ambos, portanto o consumo de armazenamento aumenta.
+- A consulta Shopee valida produto/oferta afiliada encontrada, nao garante estoque ou disponibilidade universal do varejista.

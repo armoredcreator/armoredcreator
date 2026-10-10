@@ -4,6 +4,7 @@ import asyncio
 import os
 import signal
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -178,8 +179,8 @@ class Coordinator:
 
         Telethon stores the user session in SQLite. Keeping ArmoredSync connected
         while ArmoredHub opens that same session causes a Windows SQLite lock.
-        Ingestion/materialization is complete before this method is called, so
-        releasing the connection does not interrupt the canonical pipeline.
+        Callers release it after discovery/materialization and pause live polling
+        before the Hub opens its own connection.
         """
         source = self.source
         reader = getattr(source, "reader", None)
@@ -306,7 +307,43 @@ class Coordinator:
             # Sync must be released before Studio/Hub can use the same session.
             await self._release_source_connection()
 
-    async def _vision_only_async(self, message):
+    def _run_pipeline_with_private_database(
+        self,
+        item_id: str,
+        *,
+        stop_after_vision: bool = False,
+        before_hub=None,
+    ) -> None:
+        """Run synchronous pipeline work on a thread-owned SQLite connection."""
+        from copy import copy
+
+        db = Database(self.db.path, initialize=False)
+        try:
+            publisher = None
+            studio = None
+            ia = None
+            if not stop_after_vision:
+                publisher = copy(self.pipeline.publisher)
+                if hasattr(publisher, "db"):
+                    publisher.db = db
+                studio = self.pipeline.studio
+                ia = self.pipeline.ia
+            pipeline = Pipeline(
+                db,
+                self.storage,
+                self.pipeline.vision,
+                studio,
+                publisher,
+                ia,
+            )
+            pipeline.set_shutdown_checker(lambda: self._shutdown_requested)
+            if before_hub is not None:
+                pipeline.set_before_hub_checker(before_hub)
+            pipeline.run(item_id, stop_after_vision=stop_after_vision)
+        finally:
+            db.close()
+
+    async def _vision_only_async(self, message, *, offload: bool = False):
         """Reserve and classify a candidate without materializing its media."""
         ingest = IngestMessage(
             telegram_message_id=str(message.telegram_message_id),
@@ -327,24 +364,108 @@ class Coordinator:
             return item_id, current
         if current.state == State.FAILED:
             raise RuntimeError("FAILED item requires deterministic recovery before Vision")
-        self.pipeline.run(item_id, stop_after_vision=True)
+        if offload:
+            await asyncio.to_thread(
+                self._run_pipeline_with_private_database,
+                item_id,
+                stop_after_vision=True,
+            )
+        else:
+            self.pipeline.run(item_id, stop_after_vision=True)
         return item_id, self.db.get(item_id)
 
-    async def _run_staged_catch_up_async(self) -> list[str]:
-        """Run catch-up in four durable stages: reserve, Vision, download, production.
+    async def _poll_live_during_catch_up(
+        self,
+        source,
+        stop_event: asyncio.Event,
+        source_io_lock: asyncio.Lock,
+        poll_seconds: float,
+        hub_pause_requested: threading.Event,
+        hub_paused: threading.Event,
+    ) -> None:
+        fetch = source.fetch_live_candidate_async
+        commit = source.commit_live_checkpoints
+        while not stop_event.is_set():
+            if hub_pause_requested.is_set():
+                await self._release_source_connection()
+                hub_paused.set()
+                try:
+                    while hub_pause_requested.is_set() and not stop_event.is_set():
+                        await asyncio.sleep(0.05)
+                finally:
+                    hub_paused.clear()
+                continue
+            try:
+                async with source_io_lock:
+                    try:
+                        message, checkpoints = await fetch()
+                    finally:
+                        await self._release_source_connection()
+                if message is None:
+                    if checkpoints:
+                        commit(checkpoints)
+                else:
+                    item_id, item = await self._vision_only_async(
+                        message,
+                        offload=True,
+                    )
+                    if item.state == State.WAITING_VISION or item.affiliate_url:
+                        if checkpoints:
+                            commit(checkpoints)
+                        self.log.info(
+                            "[COORDINATOR][CATCH-UP][LIVE-DISCOVERY] "
+                            "durable candidate=%s state=%s",
+                            item_id,
+                            item.state.value,
+                        )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.log.exception(
+                    "[COORDINATOR][CATCH-UP][LIVE-DISCOVERY] "
+                    "candidate remains retryable; checkpoint not advanced: %s",
+                    exc,
+                )
 
-        SQLite is the restart boundary. Stage 1 only reserves metadata for every
-        configured source. Stage 2 classifies reserved candidates without media.
-        Stage 3 materializes Vision-approved originals serially. Stage 4 runs the
-        canonical production pipeline in configured source order, never mixing
-        destination routes. No media queue is persisted or created.
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=poll_seconds)
+            except asyncio.TimeoutError:
+                pass
+
+    async def _run_staged_catch_up_async(self) -> list[str]:
+        """Discover and classify history, then produce one approved item at a time.
+
+        SQLite is the restart boundary. Discovery reserves metadata only; Vision
+        decisions are persisted before any download. New messages continue to
+        be discovered and Vision-checked during production. Each approved item
+        completes materialization, production, publication and cleanup before
+        the next original is downloaded.
         """
         source = self.source
         processed: list[str] = []
         checkpoint_blocked = False
 
+        # Repair interrupted pre-download state before Vision retries.
+        for item in self.db.pre_download_recovery_items():
+            target = (
+                State.RECEIVED
+                if str(item.affiliate_url or "").strip()
+                else State.VISION
+            )
+            self.db.transition(
+                item.content_id,
+                target,
+                "catch-up-repaired-recovery-without-original",
+            )
+        for item in self.db.vision_approved_interrupted_items():
+            self.db.transition(
+                item.content_id,
+                State.RECEIVED,
+                "catch-up-recovered-vision-evidence",
+            )
+
         # Stage 1: discover/reserve candidates from all configured sources.
-        # Do not run Vision or download media while any source is still scanning.
+        # Do not download media while any source is still scanning.
         iterator = source.iter_historical_candidates_async()
         try:
             async for message in iterator:
@@ -377,6 +498,7 @@ class Coordinator:
                         "historical checkpoint remains blocked: %s",
                         item_id, exc,
                     )
+                    break
         finally:
             await self._release_source_connection()
 
@@ -398,58 +520,289 @@ class Coordinator:
             if item.content_id not in processed:
                 processed.append(item.content_id)
 
-        # Stage 3: download approved originals serially. No Studio/Hub work is
-        # allowed until the download stage has been attempted for all approvals.
-        for item in self.db.pending_vision_approved_items():
-            if item.state != State.RECEIVED or not item.affiliate_url:
-                continue
-            if item.original_path.is_file():
-                continue
-            materializer = getattr(source, "materialize_candidate_async", None)
-            if materializer is None:
-                checkpoint_blocked = True
+        # WAITING_VISION is a durable business outcome. Unresolved rows still in
+        # RECEIVED/VISION are technical Vision failures and must block progress.
+        vision_failures = [
+            item
+            for item in self.db.pending_vision_candidates()
+            if item.state != State.WAITING_VISION
+        ]
+        if vision_failures:
+            checkpoint_blocked = True
+            for item in vision_failures:
                 self.log.error(
-                    "[COORDINATOR][CATCH-UP][DOWNLOAD] source cannot materialize %s",
+                    "[COORDINATOR][CATCH-UP][VISION] item=%s remains retryable; "
+                    "historical cutover is blocked",
                     item.content_id,
                 )
-                continue
 
-            async def materialize(target, source_id=item.source_id, message_id=item.telegram_message_id):
-                if hasattr(source, "sources"):
-                    await source.materialize_candidate_async(source_id, message_id, target)
-                else:
-                    if str(source.source_id) != str(source_id):
-                        raise RuntimeError(f"source-mismatch-for-materialization:{source_id}")
-                    await source.materialize_candidate_async(message_id, target)
+        failed = checkpoint_blocked or bool(
+            getattr(source, "historical_materialization_failed", False)
+        )
+        if failed:
+            self._last_catch_up_completed_count = 0
+            return processed
 
-            ingest = IngestMessage(
-                telegram_message_id=item.telegram_message_id,
-                source_id=item.source_id,
-                topic_id=item.topic_id,
-                topic_name=item.topic_name,
-                original_url=item.original_url,
-                materialize=materialize,
-            )
+        live_fetch = getattr(source, "fetch_live_candidate_async", None)
+        live_commit = getattr(source, "commit_live_checkpoints", None)
+        commit_discovered = getattr(
+            source,
+            "commit_historical_discovery_checkpoints",
+            None,
+        )
+        live_task = None
+        live_stop = None
+        source_io_lock = asyncio.Lock()
+        hub_pause_requested = threading.Event()
+        hub_paused = threading.Event()
+        if (
+            callable(live_fetch)
+            and callable(live_commit)
+            and callable(commit_discovered)
+        ):
+            # All discovered historical candidates and their Vision outcomes
+            # are durable before moving the reader's cursor to live discovery.
+            commit_discovered()
+            live_stop = asyncio.Event()
             try:
-                await self._ensure_source_connection()
+                poll_seconds = max(
+                    0.25,
+                    float(
+                        os.getenv(
+                            "ARMORED_CATCHUP_LIVE_POLL_SECONDS",
+                            "2",
+                        )
+                    ),
+                )
+            except ValueError:
+                poll_seconds = 2.0
+            live_task = asyncio.create_task(
+                self._poll_live_during_catch_up(
+                    source,
+                    live_stop,
+                    source_io_lock,
+                    poll_seconds,
+                    hub_pause_requested,
+                    hub_paused,
+                )
+            )
+
+        # Production is interleaved with materialization: download one approved
+        # original, run the canonical resumable pipeline, and only then select
+        # the next item. Existing originals/artifacts are resumed from SQLite.
+        configured_sources = [
+            str(candidate.source_id)
+            for candidate in getattr(source, "sources", ())
+            if getattr(candidate, "source_id", None) is not None
+        ]
+        source_rank = {source_id: index for index, source_id in enumerate(configured_sources)}
+        production_seen: set[str] = set()
+        while not checkpoint_blocked:
+            production_items = self.db.catch_up_production_items()
+            if not configured_sources:
+                configured_sources = sorted(
+                    {item.source_id for item in production_items}
+                )
+                source_rank = {
+                    source_id: index for index, source_id in enumerate(configured_sources)
+                }
+            production_items.sort(key=lambda item: (
+                source_rank.get(str(item.source_id), len(source_rank)),
+                int(item.telegram_message_id)
+                if str(item.telegram_message_id).isdigit()
+                else 0,
+                item.content_id,
+            ))
+            item = next(
+                (
+                    candidate
+                    for candidate in production_items
+                    if candidate.content_id not in production_seen
+                ),
+                None,
+            )
+            if item is None:
+                if live_task is None:
+                    break
+                live_stop.set()
+                await live_task
+                live_task = None
+                live_stop = None
+                # A poll that was already classifying a candidate may have
+                # committed it while shutdown was requested. Pick it up before
+                # declaring historical production complete.
+                vision_failures = [
+                    pending
+                    for pending in self.db.pending_vision_candidates()
+                    if pending.state != State.WAITING_VISION
+                ]
+                if vision_failures:
+                    checkpoint_blocked = True
+                    for pending in vision_failures:
+                        self.log.error(
+                            "[COORDINATOR][CATCH-UP][VISION] item=%s remains "
+                            "retryable; historical cutover is blocked",
+                            pending.content_id,
+                        )
+                    break
+                continue
+            production_seen.add(item.content_id)
+
+            current = self.db.get(item.content_id)
+            if current.state == State.WAITING_VISION:
+                continue
+            if current.state == State.RECEIVED and not current.affiliate_url:
+                continue
+            if not current.original_path.is_file():
+                if (
+                    current.state != State.RECEIVED
+                    or not str(current.affiliate_url or "").strip()
+                ):
+                    checkpoint_blocked = True
+                    self.log.error(
+                        "[COORDINATOR][CATCH-UP][DOWNLOAD] item=%s has no "
+                        "recoverable approved original; historical cutover blocked",
+                        item.content_id,
+                    )
+                    break
+                if not callable(
+                    getattr(source, "materialize_candidate_async", None)
+                ):
+                    checkpoint_blocked = True
+                    self.log.error(
+                        "[COORDINATOR][CATCH-UP][DOWNLOAD] source cannot "
+                        "materialize item=%s",
+                        item.content_id,
+                    )
+                    break
+
+                async def materialize(
+                    target,
+                    source_id=current.source_id,
+                    message_id=current.telegram_message_id,
+                ):
+                    if hasattr(source, "sources"):
+                        await source.materialize_candidate_async(
+                            source_id, message_id, target
+                        )
+                    else:
+                        if str(source.source_id) != str(source_id):
+                            raise RuntimeError(
+                                f"source-mismatch-for-materialization:{source_id}"
+                            )
+                        await source.materialize_candidate_async(
+                            message_id, target
+                        )
+
+                ingest = IngestMessage(
+                    telegram_message_id=current.telegram_message_id,
+                    source_id=current.source_id,
+                    topic_id=current.topic_id,
+                    topic_name=current.topic_name,
+                    original_url=current.original_url,
+                    materialize=materialize,
+                )
                 try:
-                    await self.sync.materialize_message_async(ingest)
-                finally:
-                    await self._release_source_connection()
+                    async with source_io_lock:
+                        await self._ensure_source_connection()
+                        try:
+                            await self.sync.materialize_message_async(ingest)
+                        finally:
+                            await self._release_source_connection()
+                except Exception as exc:
+                    checkpoint_blocked = True
+                    marker = getattr(source, "mark_materialization_failed", None)
+                    if callable(marker):
+                        marker()
+                    self.log.exception(
+                        "[COORDINATOR][CATCH-UP][DOWNLOAD] %s failed; "
+                        "later production is held: %s",
+                        current.content_id,
+                        exc,
+                    )
+                    break
+
+            try:
+                if current.state == State.PUBLISHED and current.cleanup_completed:
+                    pass
+                elif live_task is not None:
+                    def pause_source_for_hub():
+                        hub_pause_requested.set()
+                        try:
+                            timeout = max(
+                                5.0,
+                                float(
+                                    os.getenv(
+                                        "ARMORED_CATCHUP_HUB_PAUSE_TIMEOUT",
+                                        "30",
+                                    )
+                                ),
+                            )
+                        except ValueError:
+                            timeout = 30.0
+                        if not hub_paused.wait(timeout):
+                            hub_pause_requested.clear()
+                            raise TimeoutError(
+                                "live Telegram discovery did not release its "
+                                "session before Hub publication"
+                            )
+
+                    await asyncio.to_thread(
+                        self._run_pipeline_with_private_database,
+                        item.content_id,
+                        before_hub=pause_source_for_hub,
+                    )
+                else:
+                    self.run(item.content_id)
+                current = self.db.get(item.content_id)
+                if current.state == State.RECOVERY or (
+                    current.state != State.WAITING_VISION
+                    and (
+                        current.state != State.PUBLISHED
+                        or (
+                            current.result_path is None
+                            or not current.result_path.is_file()
+                        )
+                        or not current.cleanup_completed
+                    )
+                ):
+                    checkpoint_blocked = True
+                    self.log.error(
+                        "[COORDINATOR][CATCH-UP][PRODUCTION] item=%s did not "
+                        "reach a durable terminal state; later items are held",
+                        item.content_id,
+                    )
+                    break
             except Exception as exc:
                 checkpoint_blocked = True
-                marker = getattr(source, "mark_materialization_failed", None)
-                if marker is not None:
-                    marker()
                 self.log.exception(
-                    "[COORDINATOR][CATCH-UP][DOWNLOAD] %s failed; "
-                    "production stage will not start this run: %s",
+                    "[COORDINATOR][CATCH-UP][PRODUCTION] %s failed; "
+                    "later source production is held: %s",
                     item.content_id, exc,
                 )
+                break
+            finally:
+                hub_pause_requested.clear()
+            if item.content_id not in processed:
+                processed.append(item.content_id)
 
-        # A failed scan, Vision call, or download must not let the source move
-        # to LIVE or allow later production phases to overtake an incomplete
-        # download stage. SQLite rows remain available for the next recovery.
+        if live_task is not None and live_stop is not None:
+            live_stop.set()
+            await live_task
+            pending_vision = [
+                item
+                for item in self.db.pending_vision_candidates()
+                if item.state != State.WAITING_VISION
+            ]
+            if pending_vision:
+                checkpoint_blocked = True
+                for item in pending_vision:
+                    self.log.error(
+                        "[COORDINATOR][CATCH-UP][VISION] item=%s remains "
+                        "retryable; historical cutover is blocked",
+                        item.content_id,
+                    )
+
         failed = checkpoint_blocked or bool(
             getattr(source, "historical_materialization_failed", False)
         )
@@ -461,55 +814,6 @@ class Coordinator:
             else:
                 self.db.complete_historical_sync()
 
-        if failed:
-            self._last_catch_up_completed_count = 0
-            return processed
-
-        # Stage 4: complete production source-by-source in configured route order.
-        # Only items with an ORIGINAL can enter production; the pipeline resumes
-        # from the durable state and keeps publication idempotency in SQLite.
-        production_items = self.db.catch_up_production_items()
-        configured_sources = [
-            str(candidate.source_id)
-            for candidate in getattr(source, "sources", ())
-            if getattr(candidate, "source_id", None) is not None
-        ]
-        if not configured_sources:
-            configured_sources = sorted({item.source_id for item in production_items})
-        source_rank = {source_id: index for index, source_id in enumerate(configured_sources)}
-        production_items.sort(key=lambda item: (
-            source_rank.get(str(item.source_id), len(source_rank)),
-            int(item.telegram_message_id) if str(item.telegram_message_id).isdigit() else 0,
-            item.content_id,
-        ))
-
-        for item in production_items:
-            current = self.db.get(item.content_id)
-            if current.state == State.WAITING_VISION:
-                continue
-            if current.state == State.RECEIVED and not current.affiliate_url:
-                continue
-            if not current.original_path.is_file():
-                continue
-            try:
-                self.run(item.content_id)
-                current = self.db.get(item.content_id)
-                if current.state == State.RECOVERY:
-                    checkpoint_blocked = True
-                    # Do not let a later source overtake a source with an
-                    # unresolved publication or technical recovery.
-                    break
-            except Exception as exc:
-                checkpoint_blocked = True
-                self.log.exception(
-                    "[COORDINATOR][CATCH-UP][PRODUCTION] %s failed; "
-                    "later source production is held: %s",
-                    item.content_id, exc,
-                )
-                break
-            if item.content_id not in processed:
-                processed.append(item.content_id)
-
         self._last_catch_up_completed_count = sum(
             1 for item_id in set(processed)
             if self.db.get(item_id).state == State.PUBLISHED
@@ -518,11 +822,12 @@ class Coordinator:
         return processed
 
     async def run_catch_up_async(self) -> list[str]:
-        """Complete historical Vision classification before one-at-a-time downloads.
+        """Classify history before serial production while continuing live intake.
 
         Telegram history is streamed; SQLite stores the durable candidate state.
-        Media is never batch-downloaded, and the canonical pipeline processes only
-        one materialized item at a time.
+        New messages are discovered during production, media is never
+        batch-downloaded, and the canonical pipeline processes only one
+        materialized item at a time.
         """
         source = self.source
         if (

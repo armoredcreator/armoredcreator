@@ -1,6 +1,8 @@
 # Operação de catch-up por etapas
 
-O catch-up por etapas executa uma única ferramenta por invocação e encerra. Ele é separado do processo contínuo `run_coordinator.py`, que não deve ser iniciado durante esta validação.
+O fluxo integrado normal é `run_coordinator.py`/`START_ALL.bat`: ele descobre o histórico, executa Vision sem mídia, mantém a descoberta de mensagens novas durante a produção e conclui cada item aprovado antes de materializar o próximo. O cutover para LIVE só ocorre depois de finalizar a produção e não haver falhas técnicas pendentes.
+
+Os comandos deste documento são ferramentas de diagnóstico/controle manual. Cada invocação executa uma única etapa e encerra. Não execute uma etapa ao mesmo tempo que o processo contínuo ou outra instância que use o mesmo banco.
 
 Execute no PowerShell, a partir da raiz do projeto, com `credentials/project.env` configurado e sem outra instância do Coordinator usando o banco:
 
@@ -34,9 +36,9 @@ python .\run_catchup_stage.py stock
 
 Só começa se não houver candidatos aguardando decisão da Vision. Baixa, um por vez, somente originais aprovados pela Vision; a primeira falha interrompe a etapa para preservar a ordem. Não executa IA, Studio/RVC, Hub, Telegram/publicação, cleanup ou LIVE.
 
-## Parada obrigatória após ArmoredStock
+## Após ArmoredStock
 
-Após o relatório de Stock, pare. Não execute `START_ALL.bat` nem `run_coordinator.py` nesta fase, pois eles iniciam o fluxo normal do Coordinator. A continuação para IA/Studio/Hub/Telegram deve ser decidida separadamente.
+O relatório de Stock confirma apenas a materialização dos originais aprovados; não confirma Studio, Hub ou publicação. Quando for a hora de iniciar a produção integrada, execute `START_ALL.bat` ou `run_coordinator.py`. O Coordinator retoma os itens persistidos no SQLite e conclui o fluxo respeitando a ordem por item.
 
 ## Segurança e retomada
 

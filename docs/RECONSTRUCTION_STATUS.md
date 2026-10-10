@@ -16,7 +16,8 @@
 - ArmoredStudio, análise de áudio e processamento RVC.
 - ArmoredHub, reconciliação e idempotência.
 - Coordinator, SQLite, checkpoints, Recovery, Startup Audit, storage e trace.
-- Coleta histórica separada em Sync → Vision → Stock.
+- Ferramentas staged independentes para Sync → Vision → Stock (diagnóstico/controle manual).
+- Catch-up integrado no Coordinator: descobre e classifica o histórico sem mídia, mantém descoberta/Vision de mensagens novas durante a produção e materializa/processa/publica um item aprovado por vez.
 - **ArmoredStock** como pacote de ferramenta independente em `ArmoredStock/service.py`; `run_armored_stock.py` é o launcher dedicado e `run_catchup_stage.py stock` delega à mesma implementação, sem duplicar materialização.
 - Configuração de exemplo, launcher, documentação e testes textuais.
 
@@ -35,11 +36,11 @@ O pipeline de orquestração e o gerador de legendas foram restaurados a partir 
 
 ## Estado da certificação
 
-- A suíte completa e a validação de import/compilação da revisão publicada foram executadas; resultados e ambiente constam em [`RELEASE_CERTIFICATION.md`](RELEASE_CERTIFICATION.md).
+- A certificação de catch-up integrado inclui testes de ordem por item, checkpoints persistidos sem cutover, coleta/Vision concorrente durante Studio e bloqueio do cutover após falha técnica. Resultados e limites constam em [`RELEASE_CERTIFICATION.md`](RELEASE_CERTIFICATION.md).
 - Três fontes Telegram e seus destinos foram resolvidos; o bot autenticou e tinha permissões de envio nos três tópicos.
 - Um vídeo real autorizado percorreu Vision-before-download, ArmoredStock, Studio e publicação no destino da fonte. Telegram confirmou a mensagem, o SQLite persistiu `PUBLISHED`/`CONFIRMED` e a repetição idempotente retornou o mesmo ID sem duplicar a publicação.
 - As credenciais, sessão Telegram, banco operacional, logs, mídias e runtime/modelos locais são dados de máquina e permanecem fora do Git.
-- A execução certifica este fluxo real controlado, não disponibilidade futura de terceiros, coleta histórica irrestrita, todas as combinações de áudio ou operação contínua sem supervisão.
+- A execução real controlada anterior não substitui um catch-up histórico completo ou operação LIVE prolongada. Também não certifica disponibilidade futura de terceiros, todas as combinações de áudio ou operação sem supervisão.
 
 ## Limpeza deliberada
 

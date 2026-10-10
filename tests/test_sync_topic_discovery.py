@@ -1,11 +1,13 @@
 import asyncio
 import os
+import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
 from types import SimpleNamespace
 
 from ArmoredSync.service import TelegramSource
+from armored_core.database import Database
 
 
 class FakeTelegramClient:
@@ -51,6 +53,54 @@ class TelegramDiscoveryTests(unittest.TestCase):
 
         self.assertEqual(topics, [(0, "Geral")])
         self.assertEqual(client.requests, [])
+
+    def test_general_chat_history_checkpoint_is_durable_without_cutover(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Database(Path(temp_dir) / "state.sqlite")
+            client = FakeTelegramClient(
+                messages=[
+                    SimpleNamespace(
+                        id=201,
+                        video=object(),
+                        message="https://shopee.com.br/x/201",
+                        entities=[],
+                        grouped_id=None,
+                    )
+                ],
+                forum=False,
+            )
+
+            class Reader:
+                def __init__(self):
+                    self.client = client
+
+                async def connect(self):
+                    pass
+
+                async def disconnect(self):
+                    pass
+
+            source = TelegramSource(
+                Path(temp_dir),
+                Reader(),
+                db=db,
+                source="-100123",
+                source_id="source-1",
+            )
+
+            async def scan():
+                async for _candidate in source.iter_historical_candidates_async():
+                    pass
+
+            try:
+                asyncio.run(scan())
+                source.commit_historical_discovery_checkpoints()
+
+                self.assertEqual(db.source_sync_topic_checkpoint("source-1", 0), 201)
+                self.assertEqual(db.source_sync_mode("source-1"), "CATCH_UP")
+                self.assertFalse(db.historical_complete())
+            finally:
+                db.close()
 
     def test_forum_topic_discovery_does_not_fallback_on_api_failure(self):
         client = FakeTelegramClient(

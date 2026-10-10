@@ -215,6 +215,11 @@ class TelegramSource:
         self.mark_historical_complete()
         self._historical_scan_exhausted = True
 
+    def commit_historical_discovery_checkpoints(self) -> None:
+        """Persist discovered history without declaring production/cutover complete."""
+        if self.db is not None and self._historical_checkpoints:
+            self.commit_live_checkpoints(dict(self._historical_checkpoints))
+
     def mark_materialization_failed(self) -> None:
         self._historical_materialization_failed = True
 
@@ -858,7 +863,7 @@ class TelegramSource:
                         None,
                     )
 
-            if topic_max_id and int(topic_id) > 0:
+            if topic_max_id:
                 self._historical_checkpoints[topic_id] = topic_max_id
 
     async def iter_historical_candidates_async(self):
@@ -879,6 +884,7 @@ class TelegramSource:
         if not topics:
             raise RuntimeError(f"Nenhum tópico de fórum encontrado na fonte Telegram {source}.")
 
+        self._topics = topics
         self._historical_checkpoints.clear()
         self._historical_candidates_emitted = 0
         self._historical_limit_reached = False
@@ -921,6 +927,7 @@ class TelegramSource:
             if not topics:
                 raise RuntimeError(f"Nenhum tópico de fórum encontrado na fonte Telegram {source}.")
 
+            self._topics = topics
             self._historical_checkpoints.clear()
             candidates: list[SyncMessage] = []
             async for message_id, topic_id, topic_name, message, original_url in self._candidate_iterator(
@@ -1420,6 +1427,12 @@ class MultiTelegramSource:
                 source.complete_historical_sync()
         if self.sources and all(source.is_historical_complete() for source in self.sources):
             self.db.complete_historical_sync()
+
+    def commit_historical_discovery_checkpoints(self) -> None:
+        """Persist each completed history scan without entering LIVE mode."""
+        for source in self.sources:
+            if source.historical_scan_exhausted:
+                source.commit_historical_discovery_checkpoints()
 
     def mark_ingested(self, telegram_message_id: str) -> None:
         if self._last_source is not None:

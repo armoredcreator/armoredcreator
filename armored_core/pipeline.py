@@ -17,10 +17,15 @@ class Pipeline:
         self.log = logging.getLogger(__name__)
         self.trace = PipelineTrace(storage.root)
         self._shutdown_checker = lambda: False
+        self._before_hub_checker = None
 
     def set_shutdown_checker(self, checker) -> None:
         """Attach the Coordinator shutdown signal without coupling layers."""
         self._shutdown_checker = checker
+
+    def set_before_hub_checker(self, checker) -> None:
+        """Allow async source owners to release shared Telegram sessions before Hub."""
+        self._before_hub_checker = checker
 
     def run(self, item_id: str, *, stop_after_vision: bool = False) -> None:
         item = self.db.get(item_id)
@@ -235,6 +240,8 @@ class Pipeline:
 
             item = self.db.get(item_id)
             if item.state == State.PUBLISHING:
+                if self._before_hub_checker is not None:
+                    self._before_hub_checker()
                 self.log.info("[PIPELINE][ITEM %s] HUB/PUBLICAÇÃO iniciando", item.content_id)
                 if not item.result_path or not item.result_path.is_file():
                     raise FileNotFoundError("publication-result-missing")

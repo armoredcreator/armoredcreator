@@ -13,15 +13,22 @@ A visão geral está em [`docs/VISAO_GERAL_ARMORED_CREATOR.md`](docs/VISAO_GERAL
 - **CATCH-UP → LIVE** é controlado por estado persistente; um bloqueio técnico não pode ser saltado.
 - **Vision-before-download**: a aprovação Shopee é persistida antes de materializar a mídia.
 - No máximo **um item de mídia ativo** por vez. Não há filas físicas nem Redis, RabbitMQ, Celery ou Kafka.
+- Durante a produção histórica, a descoberta de novas mensagens e a Vision continuam em segundo plano; os checkpoints só avançam depois da decisão Vision persistida. O Coordinator serializa o acesso à sessão Telegram e a pausa durante o Hub para evitar conflito com a reconciliação/publicação.
 - Cada fonte mantém roteamento e workspace separados: `storage/Videos GRUPO_FONTE_1`, `storage/Videos GRUPO_FONTE_2`, `storage/Videos GRUPO_FONTE_3`.
 - **Áudio**: RVC somente para narração PT-BR confirmada com confiança suficiente. Fala estrangeira, música, silêncio ou classificação incerta não chamam RVC; o áudio original é silenciado e o efeito original do projeto é aplicado.
 - **Hub** reconcilia publicação. `UNKNOWN` nunca é republicado automaticamente.
 - **Cleanup** somente após publicação confirmada; ORIGINAL e vídeo FINAL publicado são preservados. Somente arquivos temporários derivados são removidos.
 - **ArmoredStock** é uma ferramenta independente em `ArmoredStock/service.py`. Ela usa o Coordinator e SQLite existentes para materializar, um por vez, somente originais aprovados pela Vision. Não executa IA, Studio/RVC, Hub, publicação, cleanup nem cutover para LIVE.
 
-## Coleta histórica por etapas
+## Catch-up integrado e ferramentas por etapa
 
-Cada comando executa uma única etapa e termina. Configure `credentials/project.env` e garanta que nenhuma outra instância esteja usando o banco.
+O caminho normal é o Coordinator, que retoma o SQLite, descobre o histórico sem baixar mídia, persiste as decisões da Vision e processa cada aprovado de ponta a ponta antes de baixar o próximo. Enquanto há produção, ele também descobre e classifica mensagens novas. O cutover para LIVE só acontece depois de concluir a produção histórica e não havendo falha técnica pendente.
+
+```powershell
+.\START_ALL.bat
+```
+
+As etapas abaixo continuam disponíveis para diagnóstico/controlar explicitamente uma fase. Cada comando executa uma única etapa e termina; não as execute junto com o Coordinator ou outra instância que use o mesmo banco:
 
 ```powershell
 python .\\run_catchup_stage.py sync
@@ -33,7 +40,7 @@ python .\\run_catchup_stage.py stock
 - **Vision** valida candidatos e persiste a decisão; os não aprovados ficam em `WAITING_VISION`, sem download.
 - **ArmoredStock** baixa apenas originais aprovados, serialmente, e para na primeira falha.
 - Também é possível iniciar a ferramenta diretamente com `python .\\run_armored_stock.py`. Os dois comandos usam a mesma implementação de ArmoredStock, sem duplicar a lógica de materialização.
-- A conclusão de Stock não significa que os vídeos foram processados/publicados. Não inicie `START_ALL.bat` ou `run_coordinator.py` sem decidir explicitamente a continuação para produção.
+- A conclusão de Stock não significa que os vídeos foram processados/publicados; a retomada/produção é feita pelo Coordinator integrado quando `START_ALL.bat` ou `run_coordinator.py` é iniciado.
 
 Consulte [`CATCH_UP_STAGES.md`](CATCH_UP_STAGES.md) para os gates operacionais.
 
