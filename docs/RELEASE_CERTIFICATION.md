@@ -3,7 +3,7 @@
 ## Release
 
 - Ultima release publicada: `v1.0.1`.
-- Revisao de catch-up integrado em validacao: ainda nao publicada; nao representa o estado da tag.
+- Revisao de catch-up integrado publicada na branch `armoredcreator-architecture-skeleton`, commit `352ebad`; ainda nao possui tag de release. `v1.0.1` continua sendo a ultima release formal.
 - Branch: `armoredcreator-architecture-skeleton`.
 - Runtime de referencia: Windows, Python 3.11.
 - O codigo e os assets versionados foram separados deliberadamente de credenciais, sessao Telegram, banco operacional, logs, videos e do runtime/modelos RVC instalados nesta maquina.
@@ -16,7 +16,7 @@ Executado na arvore de codigo do release:
 py -3.11 -m pytest -q -W error::RuntimeWarning
 ```
 
-Resultado da release publicada `v1.0.1`: **243 passed, 1 skipped**. Na revisao local nao publicada do catch-up integrado, o mesmo comando terminou em **250 passed, 1 skipped**; warnings de runtime foram tratados como erros. Os sete novos casos verificam checkpoint da descoberta sem cutover, concorrencia deterministica de descoberta/Vision durante Studio, falha de Vision concorrente sem avancar checkpoint, limite de catch-up sem ativar descoberta LIVE, producao serial por item, bloqueio apos falha historica de Vision e tratamento terminal `WAITING_VISION`. O teste concorrente usa fontes e servicos simulados: nao certifica a estabilidade do Telegram real sob longa operacao.
+Resultado da release `v1.0.1`: **243 passed, 1 skipped**. A revisao publicada na branch terminou em **250 passed, 1 skipped** no worktree e em `C:\Users\Administrador\Downloads\ArmoredCreator-final`; warnings de runtime foram tratados como erros. Os sete novos casos verificam checkpoint da descoberta sem cutover, concorrencia deterministica de descoberta/Vision durante Studio, falha de Vision concorrente sem avancar checkpoint, limite de catch-up sem ativar descoberta LIVE, producao serial por item, bloqueio apos falha historica de Vision e tratamento terminal `WAITING_VISION`. O teste concorrente usa fontes e servicos simulados: nao certifica a estabilidade do Telegram real sob longa operacao.
 
 ## Validacao real controlada
 
