@@ -1,11 +1,11 @@
 # Operacao e retomada do catch-up
 
-Atualizado em 2026-10-10, 12:33 (horario local UTC-3). Este registro descreve o estado observado nesta maquina; nao substitui o SQLite.
+Atualizado em 2026-10-10, 12:57 (horario local UTC-3). Este registro descreve o estado observado nesta maquina; nao substitui o SQLite.
 
 ## Versao e localizacao
 
 - Projeto operacional: `C:\Users\Administrador\Downloads\ArmoredCreator-final`.
-- Branch Git: `armoredcreator-architecture-skeleton` (esta atualizacao de comprovacao LIVE sera publicada nesta branch).
+- Branch Git: `armoredcreator-architecture-skeleton` (esta atualizacao operacional sera publicada nesta branch).
 - Ultima release formal com tag: `v1.0.1`. O codigo mais novo esta publicado na branch, mas ainda nao foi congelado como release.
 - A arvore operacional contem o codigo atualizado, credenciais privadas, sessao Telegram, banco SQLite e runtime local do Studio. Esses dados privados/runtime nao sao versionados.
 
@@ -21,18 +21,19 @@ Atualizado em 2026-10-10, 12:33 (horario local UTC-3). Este registro descreve o 
 
 O Coordinator foi iniciado em `Downloads\ArmoredCreator-final` em 2026-10-10 por volta de 12:14, com historico completo (`ARMORED_SYNC_CATCHUP_LIMIT=0`) e publicacao real habilitada (`ARMORED_HUB_DRY_RUN=0`). Foi limitado a **uma iteracao LIVE apos o catch-up** para esta validacao; essa limitacao existe somente no ambiente do processo, nao no arquivo de credenciais.
 
-Ultima observacao registrada (12:32:21):
+Ultima observacao registrada (12:57:33):
 
-- 401 itens no SQLite: 400 `RECEIVED` e 1 `PUBLISHED` anterior.
+- 18.727 itens registrados: 18.570 `RECEIVED`, 157 `WAITING_VISION`, 1 `VISION` e 1 `PUBLISHED` anterior. `RECEIVED` aqui significa estado de fila/reserva; nao significa aprovado, processado ou publicado.
+- Um agregado separado encontrou 133 itens com `affiliate_url` persistido. Isso nao certifica que Studio/Hub terminaram para eles.
 - Tres fontes ainda em CATCH-UP; zero checkpoints historicos persistidos e zero fontes marcadas como concluidas.
-- Uma publicacao registrada anteriormente; as consultas recentes confirmaram que o processo continua ativo, mas nao verificaram de forma independente o estado `UNKNOWN`.
+- Uma publicacao registrada anteriormente. A consulta de status `UNKNOWN` nao foi valida para o esquema atual; nao inferir contagem de ambiguidades a partir dela.
 - Lease do Coordinator presente: **nao iniciar outra instancia**.
 - Aproximadamente 198 GB livres.
-- Launcher e Coordinator estavam presentes/respondendo; o Coordinator iniciou as 12:14:08 e acumulava CPU, e o item mais recente foi atualizado as 12:32:13. Isso indica atividade recente, mas nao identifica em qual fonte/topico a leitura esta nem prova que o historico terminou. O log operacional permanece sem atualizacoes desde a inicializacao, portanto nao fornece progresso por pagina nem diagnostico conclusivo.
+- Launcher e Coordinator estavam presentes/respondendo; iniciados as 12:14:08. O item mais recente foi atualizado as 12:57:29 e o Coordinator acumulava CPU. Isso indica atividade recente, mas nao identifica em qual fonte/topico a leitura esta nem prova que o historico terminou. O log operacional permanece sem atualizacoes desde a inicializacao, portanto nao fornece progresso por pagina nem diagnostico conclusivo.
 
 ## Prazo estimado
 
-Ainda nao ha ETA confiavel. O numero total de candidatos elegiveis no historico nao e conhecido; a leitura pode incluir muitas mensagens sem video e paginas/tópicos que ainda nao foram percorridos. O total cresceu de 379 para 401 entre aproximadamente 12:29 e 12:32, mas isso nao permite extrapolar a conclusao da varredura. Depois da descoberta ainda faltam Vision, processamento serial, publicacoes reais, cleanup e cutover. A execucao pode levar horas ou mais se o historico for grande; somente os estados SQLite e a conclusao de cada etapa permitem estreitar a previsao.
+Ainda nao ha ETA confiavel e, sim, ainda falta bastante: apos cerca de 43 minutos, o banco registra 18.727 itens, mas nenhuma das tres fontes concluiu o historico e nao ha checkpoint historico. Apenas 133 tem `affiliate_url` persistido; 157 estao `WAITING_VISION`, e a grande maioria continua `RECEIVED`. O tamanho total do historico elegivel e desconhecido e o log nao reporta paginas/progresso por fonte, portanto nao e possivel converter o ritmo atual em horas/dias restantes. Alem de terminar a descoberta, ainda sera necessario resolver/classificar candidatos, produzir sequencialmente os aprovados, confirmar publicacoes, concluir cleanup e validar cutover/LIVE.
 
 As publicacoes durante esta execucao sao efeitos reais nos topicos configurados. Nao apagar nem recriar o banco, sessao ou storage.
 
