@@ -3,7 +3,7 @@
 ## Release
 
 - Ultima release publicada: `v1.0.1`.
-- Revisao de catch-up integrado publicada na branch `armoredcreator-architecture-skeleton`, commit `352ebad`; ainda nao possui tag de release. `v1.0.1` continua sendo a ultima release formal.
+- Revisao de catch-up integrado publicada na branch `armoredcreator-architecture-skeleton`; ainda nao possui tag de release. `v1.0.1` continua sendo a ultima release formal.
 - Branch: `armoredcreator-architecture-skeleton`.
 - Runtime de referencia: Windows, Python 3.11.
 - O codigo e os assets versionados foram separados deliberadamente de credenciais, sessao Telegram, banco operacional, logs, videos e do runtime/modelos RVC instalados nesta maquina.
@@ -64,18 +64,29 @@ python .\run_catchup_stage.py stock
 
 `sync` com `ARMORED_SYNC_CATCHUP_LIMIT=0` percorre o historico completo e pode ser longo. As etapas staged preservam o estado SQLite; nao apague o banco para repetir uma etapa. O fluxo integrado normal e `.\START_ALL.bat`; o Coordinator preserva as reservas/checkpoints, descobre e valida mensagens novas durante a producao e termina um item aprovado antes de baixar o proximo.
 
+## Comprovacao do modo LIVE sem depender de postagem espontanea
+
+O teste de disponibilidade LIVE nao deve esperar dias por uma nova mensagem natural. Sao duas verificacoes distintas:
+
+1. **Disponibilidade em ociosidade:** depois do catch-up, manter o processo por uma janela finita sem novas mensagens e confirmar que continua ativo, que o polling/reconexao progride e que nao ha crescimento indevido de fila nem erros. Isso comprova monitoramento ocioso, nao a entrega de uma mensagem nova.
+2. **Entrega deterministica de mensagem:** usar a fonte simulada em testes automatizados para injetar uma mensagem durante LIVE e verificar ingestao, identidade/fonte, checkpoint e processamento sem duplicacao. Os testes de polling round-robin e watchdog de reconexao cobrem parte deste contrato.
+3. **Integracao Telegram controlada:** se for necessaria evidencia do transporte real, enviar uma mensagem sintetica para um grupo privado de teste e encaminhar para um destino privado de teste, nunca para os topicos de producao. Confirmar deteccao unica, rota, publicacao/confirmacao e idempotencia. Esta verificacao requer um destino de teste configurado e nao depende de trafego espontaneo dos grupos reais.
+
+Uma mensagem nova observada nos grupos de producao pode ser registrada como evidencia adicional, mas nao e pre-requisito nem se deve afirmar que houve uma entrega real apenas com o teste simulado. A operacao ociosa LIVE tambem nao substitui a conclusao do catch-up historico.
+
 ## Limites do que foi certificado
 
 A execucao real prova um percurso completo de um item e o comportamento de reconciliacao no destino selecionado. Nao certifica que terceiros permanecerao disponiveis, que todos os formatos/idiomas de audio funcionarao, nem que o catch-up completo terminara sem itens `WAITING_VISION` ou falhas de rede. A operacao historica completa deve ser monitorada e retomada pelos checkpoints; nenhum sistema externo pode ser prometido como 100% disponivel.
 
 O arquivo final da publicacao controlada em `v1.0.0` foi removido pelo cleanup anterior e nao pode ser restaurado sem reprocessar o original. A partir de `v1.0.1`, o cleanup preserva o original e o resultado publicado, removendo apenas os artefatos temporarios do workspace. Essa mudanca de retencao foi verificada pela suite automatizada; nao foi feita uma segunda publicacao real so para testar a politica de limpeza. Manter todos os resultados finais aumenta o uso de disco e exige monitoramento no notebook.
 
-A revisao local adiciona descoberta/Vision de mensagens novas em paralelo a producao historica; a sessao Telegram e liberada antes do Hub usar a mesma sessao, e a producao Studio/Hub executa com uma conexao SQLite propria. A cobertura de concorrencia e de checkpoints e automatizada com servicos simulados; a coleta historica completa real e a operacao LIVE prolongada ainda nao foram executadas nesta revisao.
+A revisao local adiciona descoberta/Vision de mensagens novas em paralelo a producao historica; a sessao Telegram e liberada antes do Hub usar a mesma sessao, e a producao Studio/Hub executa com uma conexao SQLite propria. A cobertura de concorrencia e de checkpoints e automatizada com servicos simulados; a coleta historica completa real e uma janela observada de LIVE ocioso ainda nao foram executadas nesta revisao. Nao e necessario esperar uma mensagem natural para validar essas duas propriedades; consultar o plano de comprovacao LIVE acima.
 
 ## Validacao pendente para certificacao operacional
 
 - Catch-up real completo nas tres fontes; o historico pode ser extenso, consumir disco e gerar publicacoes reais. Monitorar execucao, erros e espaco livre antes de iniciar.
-- Operacao real prolongada apos cutover e confirmacao de que mensagens novas continuam sendo ingeridas sem atrasos/perdas.
+- Janela finita de disponibilidade LIVE ociosa apos cutover, sem exigir que os grupos produzam mensagens espontaneamente.
+- Integracao real de nova mensagem usando grupo e destino privados de teste; nao usar os destinos de producao para mensagem sintetica.
 - Matriz de audio em amostras autorizadas PT-BR, fala estrangeira, musica e sem audio; a verificacao real anterior cobriu apenas um clipe classificado como `MUSIC_ONLY`, sem gate RVC.
 - Throughput/retencao de originais e finais em lote. A politica preserva ambos, portanto o consumo de armazenamento aumenta.
 - A consulta Shopee valida produto/oferta afiliada encontrada, nao garante estoque ou disponibilidade universal do varejista.

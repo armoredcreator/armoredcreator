@@ -1,11 +1,11 @@
 # Operacao e retomada do catch-up
 
-Atualizado em 2026-10-10, 12:32 (horario local UTC-3). Este registro descreve o estado observado nesta maquina; nao substitui o SQLite.
+Atualizado em 2026-10-10, 12:33 (horario local UTC-3). Este registro descreve o estado observado nesta maquina; nao substitui o SQLite.
 
 ## Versao e localizacao
 
 - Projeto operacional: `C:\Users\Administrador\Downloads\ArmoredCreator-final`.
-- Branch Git: `armoredcreator-architecture-skeleton`, commit `b1f7738` (este handoff operacional sera atualizado novamente com esta observacao).
+- Branch Git: `armoredcreator-architecture-skeleton` (esta atualizacao de comprovacao LIVE sera publicada nesta branch).
 - Ultima release formal com tag: `v1.0.1`. O codigo mais novo esta publicado na branch, mas ainda nao foi congelado como release.
 - A arvore operacional contem o codigo atualizado, credenciais privadas, sessao Telegram, banco SQLite e runtime local do Studio. Esses dados privados/runtime nao sao versionados.
 
@@ -40,11 +40,11 @@ As publicacoes durante esta execucao sao efeitos reais nos topicos configurados.
 
 1. Termino da descoberta historica das tres fontes e classificacao Vision dos candidatos.
 2. Download, Studio/IA, publicacao confirmada no destino correto e cleanup preservando ORIGINAL/FINAL para cada candidato aprovado.
-3. Cutover para LIVE somente apos o catch-up completo; observar ao menos uma mensagem nova real e depois a continuidade do monitoramento.
+3. Depois do catch-up, validar LIVE por uma janela finita de ociosidade (processo ativo, polling/reconexao saudavel, sem erros) e por uma mensagem sintetica deterministica em grupo/destino privados de teste. Nao e preciso esperar publicacao espontanea nos grupos reais; nao usar destinos de producao para o teste sintetico.
 4. Validar com amostras autorizadas as classes de audio PT-BR, fala estrangeira, musica e sem audio, incluindo o gate RVC. A evidencia real anterior foi somente um clipe classificado como `MUSIC_ONLY`.
 5. Avaliar consumo de disco e quotas externas em lote. A etapa de legendas usa Gemini; Vision/publicacao dependem das APIs Shopee/Telegram. A disponibilidade dessas quotas nao pode ser inferida pelos testes locais.
 
-Ainda nao declarar a revisao como release 100% certificada nem criar nova tag antes desses gates reais. `docs/RELEASE_CERTIFICATION.md` registra o resultado automatizado e os limites de validacao.
+Ainda nao declarar a revisao como release 100% certificada nem criar nova tag antes desses gates reais. `docs/RELEASE_CERTIFICATION.md` registra o resultado automatizado e o plano de comprovacao LIVE independente de trafego espontaneo.
 
 ## Verificacao e retomada segura
 
