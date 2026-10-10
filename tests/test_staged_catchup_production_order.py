@@ -157,6 +157,22 @@ class LiveDuringCatchUpSource(HistorySource):
         self.events.append(("live-checkpoint-committed",))
 
 
+class BoundedLiveSource(LiveDuringCatchUpSource):
+    async def iter_historical_candidates_async(self):
+        candidate = self.candidates[0]
+        self.events.append(("discover", candidate.source_id, candidate.message_id))
+        yield SimpleNamespace(
+            telegram_message_id=candidate.message_id,
+            source_id=candidate.source_id,
+            topic_id=100 + int(candidate.message_id),
+            topic_name="fixture",
+            original_url=f"https://shopee.example/{candidate.message_id}",
+            source_path=None,
+            materialize=lambda _target: None,
+        )
+        self.historical_scan_exhausted = False
+
+
 class ConcurrentVision(Vision):
     def identify(self, item):
         result = super().identify(item)
@@ -294,6 +310,43 @@ def test_live_discovery_and_vision_continue_during_historical_studio(tmp_path):
         assert events.index(("vision", SOURCE_IDS[0], "999")) < events.index(
             ("published", "101")
         )
+    finally:
+        coordinator.close()
+
+
+def test_bounded_history_does_not_start_live_discovery_or_cut_over(tmp_path):
+    candidates = [
+        SimpleNamespace(source_id=SOURCE_IDS[0], message_id="101"),
+    ]
+    events = []
+    storage = Storage(tmp_path)
+    db = Database(storage.database / "armoredcreator.db")
+    studio_started = threading.Event()
+    source = BoundedLiveSource(
+        tmp_path,
+        events,
+        candidates,
+        db,
+        studio_started,
+    )
+    publisher = Publisher(events)
+    coordinator = Coordinator(
+        db,
+        storage,
+        Vision(events),
+        Studio(storage, events),
+        publisher,
+        source=source,
+    )
+    try:
+        asyncio.run(coordinator._run_staged_catch_up_async())
+
+        assert publisher.calls == ["101"]
+        assert not source.discovery_checkpoint_committed
+        assert not source.live_checkpoint_committed
+        assert not any(event[0] == "live-discovered" for event in events)
+        assert not source.completed
+        assert not coordinator.db.historical_complete()
     finally:
         coordinator.close()
 

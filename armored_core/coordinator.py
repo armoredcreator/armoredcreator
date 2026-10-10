@@ -559,6 +559,7 @@ class Coordinator:
             callable(live_fetch)
             and callable(live_commit)
             and callable(commit_discovered)
+            and bool(getattr(source, "historical_scan_exhausted", False))
         ):
             # All discovered historical candidates and their Vision outcomes
             # are durable before moving the reader's cursor to live discovery.

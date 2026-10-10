@@ -16,7 +16,7 @@ Executado na arvore de codigo do release:
 py -3.11 -m pytest -q -W error::RuntimeWarning
 ```
 
-Resultado da release publicada `v1.0.1`: **243 passed, 1 skipped**. Na revisao local nao publicada do catch-up integrado, o mesmo comando terminou em **249 passed, 1 skipped**; warnings de runtime foram tratados como erros. Os seis novos casos verificam checkpoint da descoberta sem cutover, concorrencia deterministica de descoberta/Vision durante Studio, falha de Vision concorrente sem avancar checkpoint, producao serial por item, bloqueio apos falha historica de Vision e tratamento terminal `WAITING_VISION`. O teste concorrente usa fontes e servicos simulados: nao certifica a estabilidade do Telegram real sob longa operacao.
+Resultado da release publicada `v1.0.1`: **243 passed, 1 skipped**. Na revisao local nao publicada do catch-up integrado, o mesmo comando terminou em **250 passed, 1 skipped**; warnings de runtime foram tratados como erros. Os sete novos casos verificam checkpoint da descoberta sem cutover, concorrencia deterministica de descoberta/Vision durante Studio, falha de Vision concorrente sem avancar checkpoint, limite de catch-up sem ativar descoberta LIVE, producao serial por item, bloqueio apos falha historica de Vision e tratamento terminal `WAITING_VISION`. O teste concorrente usa fontes e servicos simulados: nao certifica a estabilidade do Telegram real sob longa operacao.
 
 ## Validacao real controlada
 
