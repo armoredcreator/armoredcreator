@@ -18,6 +18,17 @@ py -3.11 -m pytest -q -W error::RuntimeWarning
 
 Resultado da release `v1.0.1`: **243 passed, 1 skipped**. A revisao publicada na branch terminou em **250 passed, 1 skipped** no worktree e em `C:\Users\Administrador\Downloads\ArmoredCreator-final`; warnings de runtime foram tratados como erros. Os sete novos casos verificam checkpoint da descoberta sem cutover, concorrencia deterministica de descoberta/Vision durante Studio, falha de Vision concorrente sem avancar checkpoint, limite de catch-up sem ativar descoberta LIVE, producao serial por item, bloqueio apos falha historica de Vision e tratamento terminal `WAITING_VISION`. O teste concorrente usa fontes e servicos simulados: nao certifica a estabilidade do Telegram real sob longa operacao.
 
+## Ensaio ponta a ponta isolado com Studio real
+
+Em 2026-10-10 foi executado um item de teste em diretorio temporario, sem abrir nem alterar o banco operacional do catch-up:
+
+1. FFmpeg gerou um MP4 sintetico vertical, sem audio. O SQLite, workspace e assets foram isolados sob um diretorio temporario, removido ao fim do ensaio.
+2. O caminho integrado de catch-up reservou o item, chamou Vision antes da materializacao, e so entao persistiu o original. Vision foi simulada e verificou explicitamente que o original ainda nao existia.
+3. `ArmoredStudio` real executou analise e exportacao usando os assets locais `banner.png` e `efeitosonoro.wav`; o MP4 final foi decodificado por FFmpeg sem erro.
+4. Publisher foi simulado: confirmou uma publicacao com ID sintetico. O item terminou `PUBLISHED`, cleanup foi concluido, ORIGINAL e FINAL permaneceram, e repetir o pipeline nao publicou novamente (uma chamada total).
+
+Resultado: `E2E=PASS`, Vision-before-download, Studio real, validacao do arquivo final e idempotencia no pipeline. Limite: esta prova nao chamou Shopee Vision nem Telegram Hub reais; as integracoes reais sao cobertas apenas pela publicacao controlada documentada abaixo e pelo ensaio real anterior, nao por este item sintetico. A prova tambem nao certifica a matriz de audio falado/RVC.
+
 ## Validacao real controlada
 
 Com autorizacao do operador, foi processado um unico video de uma das fontes configuradas; a coleta historica ilimitada nao foi iniciada.
