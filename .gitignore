@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.env
+credentials/
+**/credentials/
+!credentials/
+credentials/*
+!credentials/project.env.example
+data/
+downloads/
+processed/
+logs/
+storage/database/*.db
+storage/database/*.db-*
+*.db-shm
+*.db-wal
+storage/logs/*
+!storage/logs/.gitkeep
+storage/videos/*
+!storage/videos/.gitkeep
+storage/backups/*
+!storage/backups/.gitkeep
+
+# ArmoredStudio runtime / RVC assets
+ArmoredStudio/runtime/

@@ -4,7 +4,7 @@
 
 A ArmoredCreator será uma esteira automática que encontra vídeos nos grupos do Telegram, verifica se os links de afiliado da Shopee estão utilizáveis, prepara os vídeos, publica no destino correto e registra o resultado. Ela deve processar o histórico antigo e continuar acompanhando mensagens novas.
 
-Este documento registra a visão inicial do projeto. Ele descreve o comportamento desejado; não afirma que essas funções já estejam implementadas ou validadas.
+Este documento descreve a arquitetura operacional implementada. O escopo e as evidencias da validacao estao em [`RELEASE_CERTIFICATION.md`](RELEASE_CERTIFICATION.md).
 
 ## Como o sistema funciona
 
@@ -64,6 +64,20 @@ A coleta histórica deve ser separada do processamento de vídeos.
 - Só então liberar o processamento para o próximo item.
 
 A coleta e a validação podem avançar sem precisar esperar que cada vídeo passe por download, áudio e publicação. Porém, o processamento de mídia permanece limitado para não sobrecarregar o computador.
+
+## Ferramenta independente: ArmoredStock
+
+O ArmoredStock é uma ferramenta operacional separada do pipeline de produção. Ela usa o Coordinator e o mesmo SQLite canônico para baixar, um por vez, somente os originais cuja aprovação da Vision já está persistida.
+
+O ciclo histórico fica dividido em três comandos explícitos:
+
+1. `python .\\run_catchup_stage.py sync` — descobre e reserva mensagens das três fontes sem baixar vídeos.
+2. `python .\\run_catchup_stage.py vision` — consulta a Vision e persiste a decisão antes de qualquer download.
+3. `python .\\run_armored_stock.py` ou `python .\\run_catchup_stage.py stock` — materializa somente os originais aprovados, em ordem determinística e com um download ativo por vez.
+
+O ArmoredStock bloqueia a execução quando ainda há candidatos sem decisão da Vision ou evidência interrompida. A primeira falha de download interrompe a sequência para não permitir que um item posterior ultrapasse o item com falha. Ele não executa ArmoredIA, Studio/RVC, Hub, publicação, cleanup ou transição para LIVE.
+
+O fim do ArmoredStock significa apenas que a etapa de materialização terminou; não significa que os vídeos foram processados ou publicados. A continuação para produção deve ser iniciada separadamente e de forma explícita. SQLite, checkpoints e originais existentes não devem ser apagados para repetir a etapa.
 
 ## Velocidade e estabilidade
 
