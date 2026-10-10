@@ -1,6 +1,6 @@
 # Operacao e retomada do catch-up
 
-Atualizado em 2026-10-10 (horario local UTC-3). Este registro descreve o estado observado nesta maquina; nao substitui o SQLite.
+Atualizado em 2026-10-10, por volta de 12:29 (horario local UTC-3). Este registro descreve o estado observado nesta maquina; nao substitui o SQLite.
 
 ## Versao e localizacao
 
@@ -20,14 +20,18 @@ Atualizado em 2026-10-10 (horario local UTC-3). Este registro descreve o estado 
 
 O Coordinator foi iniciado em `Downloads\ArmoredCreator-final` em 2026-10-10 por volta de 12:14, com historico completo (`ARMORED_SYNC_CATCHUP_LIMIT=0`) e publicacao real habilitada (`ARMORED_HUB_DRY_RUN=0`). Foi limitado a **uma iteracao LIVE apos o catch-up** para esta validacao; essa limitacao existe somente no ambiente do processo, nao no arquivo de credenciais.
 
-Ultima observacao registrada:
+Ultima observacao registrada (aproximadamente 12:29):
 
-- 376 itens no SQLite: 375 `RECEIVED` e 1 `PUBLISHED` anterior.
+- 379 itens no SQLite: 378 `RECEIVED` e 1 `PUBLISHED` anterior.
 - Tres fontes ainda em CATCH-UP; zero checkpoints historicos persistidos e zero fontes marcadas como concluidas.
 - Uma publicacao confirmada no banco; zero publicacoes `UNKNOWN`.
 - Lease do Coordinator presente: **nao iniciar outra instancia**.
 - Aproximadamente 198 GB livres.
-- O processo estava presente/respondendo, mas o numero de itens nao avancou na ultima janela de observacao de cerca de cinco minutos. Os logs nao fornecem progresso por pagina; verificar se a leitura historica continua ou se a conexao ficou aguardando o Telegram. Isso nao prova conclusao nem falha.
+- O processo estava presente/respondendo. Tres itens foram reservados na janela anterior de aproximadamente 2m37s, mas essa taxa nao e estavel nem permite estimar o total. Os logs nao fornecem progresso por pagina; verificar se a leitura historica continua ou se a conexao ficou aguardando o Telegram. Isso nao prova conclusao nem falha.
+
+## Prazo estimado
+
+Ainda nao ha ETA confiavel. O numero total de candidatos elegiveis no historico nao e conhecido; a leitura pode incluir muitas mensagens sem video e paginas/tópicos que ainda nao foram percorridos. Depois da descoberta ainda faltam Vision, processamento serial, publicacoes reais, cleanup e cutover. Com o ritmo parcial observado, a execucao pode levar horas ou mais se o historico for grande; somente os estados SQLite e a conclusao de cada etapa permitem estreitar a previsao.
 
 As publicacoes durante esta execucao sao efeitos reais nos topicos configurados. Nao apagar nem recriar o banco, sessao ou storage.
 
